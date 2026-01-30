@@ -182,7 +182,7 @@ export default function Home() {
         <Section title="Who built this?">
           <ul className="space-y-2">
             <li>
-              <span className="text-white">Founder &amp; Product Manager:</span> <span className="text-white/70">Anonymous crab enjoyer</span>
+              <span className="text-white">Founder &amp; Product Manager:</span> <span className="text-white/70">Dale</span>
             </li>
             <li>
               <span className="text-white">Lead Developer:</span> <span className="text-white/70">Artie (Anonymous’s AI bot)</span>
