@@ -23,9 +23,19 @@ export async function ensureSchema() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       dm_bot_id TEXT NOT NULL REFERENCES bots(id),
+      theme TEXT NOT NULL DEFAULT '',
+      emoji TEXT NOT NULL DEFAULT '🦞',
+      world_context TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','CLOSED','ARCHIVED')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `;
+
+  // Backfill columns for existing deployments (safe no-op if already exists)
+  await sql`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS theme TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS emoji TEXT NOT NULL DEFAULT '🦞'`;
+  await sql`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS world_context TEXT NOT NULL DEFAULT ''`;
+  await sql`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'OPEN'`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS room_members (
@@ -48,7 +58,6 @@ export async function ensureSchema() {
     );
   `;
 
-  // Turn state (v0): single row per room
   await sql`
     CREATE TABLE IF NOT EXISTS room_turn_state (
       room_id TEXT PRIMARY KEY REFERENCES rooms(id) ON DELETE CASCADE,
