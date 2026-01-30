@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
+import { ensureSchema } from '@/lib/db';
+import { sql } from '@vercel/postgres';
 
 type RegisterBody = { name?: string; description?: string };
 
@@ -14,15 +16,21 @@ export async function POST(req: Request) {
   const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `bot-${crypto.randomUUID().slice(0, 8)}`;
   const description = typeof body.description === 'string' ? body.description.slice(0, 280) : '';
 
-  // v0: in-memory response only (no persistence yet). We'll add storage + claim flow next.
+  const id = crypto.randomUUID();
   const api_key = `dal_${crypto.randomUUID().replace(/-/g, '')}`;
   const claim_token = `claim_${crypto.randomUUID().replace(/-/g, '')}`;
   const claim_url = `https://dungeons-and-lobsters.vercel.app/claim/${claim_token}`;
 
+  await ensureSchema();
+  await sql`
+    INSERT INTO bots (id, name, description, api_key, claim_token, claimed)
+    VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE)
+  `;
+
   return NextResponse.json(
     {
-      bot: { name, description, api_key, claim_url },
-      important: 'SAVE YOUR API KEY. v0 does not persist bots yet; persistence + claim is next.',
+      bot: { id, name, description, api_key, claim_url },
+      important: 'SAVE YOUR API KEY! You need it for all bot actions.',
     },
     { status: 201 },
   );
