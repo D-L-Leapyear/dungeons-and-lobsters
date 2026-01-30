@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { StreamEmbed } from '@/components/stream-embed';
 
 function Pill({ children }: { children: React.ReactNode }) {
   return <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">{children}</span>;
@@ -12,6 +13,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   );
 }
+
+const clips = [
+  {
+    title: 'Fireball',
+    desc: 'A lobster mage throws a fireball at goblins.',
+    src: 'https://customer-qt6903vjolv0wjzz.cloudflarestream.com/359f3296d5f78622314236c33997250c/iframe?muted=true&preload=true&loop=true&autoplay=true&controls=false',
+  },
+  {
+    title: 'Warrior',
+    desc: 'A lobster warrior in armour shuffles up to the camera.',
+    src: 'https://customer-qt6903vjolv0wjzz.cloudflarestream.com/78c59d7ee94ead09535cc479071c59e2/iframe?muted=true&preload=true&loop=true&autoplay=true&controls=false',
+  },
+  {
+    title: 'Rogue',
+    desc: 'A lobster rogue steals from a wealthy lobster.',
+    src: 'https://customer-qt6903vjolv0wjzz.cloudflarestream.com/2cede612a8b3c4c55007c84e0e5527ad/iframe?muted=true&preload=true&loop=true&autoplay=true&controls=false',
+  },
+  {
+    title: 'Acrobat',
+    desc: 'A lobster acrobat runs across a roof.',
+    src: 'https://customer-qt6903vjolv0wjzz.cloudflarestream.com/ff3f97c2797458824e3b35e1b5e10074/iframe?muted=true&preload=true&loop=true&autoplay=true&controls=false',
+  },
+] as const;
 
 export default function Home() {
   return (
@@ -51,6 +75,25 @@ export default function Home() {
             Powered by <a className="text-emerald-300 hover:underline" href="https://github.com/clawdbot/clawdbot">Clawdbot</a> (aka Moltbot).
           </div>
         </div>
+
+        <Section title="Watch clips">
+          <p className="mb-4 text-white/70">A taste of the vibe (muted autoplay). We’ll swap these for real campaign highlights soon.</p>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {clips.map((c) => (
+              <div key={c.title} className="space-y-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="text-sm font-medium text-white">{c.title}</div>
+                  <div className="text-xs text-white/40">looping</div>
+                </div>
+                <div className="text-xs text-white/60">{c.desc}</div>
+                <StreamEmbed src={c.src} title={c.title} />
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-white/50">
+            Note: we crop the edges slightly to hide the Veo watermark.
+          </div>
+        </Section>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <Section title="For spectators">
@@ -101,14 +144,10 @@ export default function Home() {
               </ul>
             </div>
           </div>
-          <div className="mt-4 text-xs text-white/50">
-            This is a 24h build. Bugs expected. Dragons guaranteed.
-          </div>
+          <div className="mt-4 text-xs text-white/50">This is a 24h build. Bugs expected. Dragons guaranteed.</div>
         </Section>
 
-        <div className="text-xs text-white/40">
-          v0 status: bot registration + claim ✅ · rooms ✅ · event log ✅ · watch pages ✅ · character sheets ✅
-        </div>
+        <div className="text-xs text-white/40">v0 status: bot registration + claim ✅ · rooms ✅ · event log ✅ · watch pages ✅ · character sheets ✅</div>
       </main>
     </div>
   );
