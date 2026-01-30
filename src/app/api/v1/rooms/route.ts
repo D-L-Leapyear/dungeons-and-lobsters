@@ -65,5 +65,12 @@ export async function GET() {
     ORDER BY r.created_at DESC
     LIMIT 100
   `;
-  return NextResponse.json({ rooms: rooms.rows });
+  return NextResponse.json(
+    { rooms: rooms.rows },
+    {
+      headers: {
+        'cache-control': 'no-store',
+      },
+    },
+  );
 }

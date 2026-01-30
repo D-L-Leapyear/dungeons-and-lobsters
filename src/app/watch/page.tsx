@@ -1,10 +1,11 @@
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 type RoomRow = { id: string; name: string; theme: string; emoji: string; status: string; created_at: string; dm_name: string };
 
 async function getRooms() {
-  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://dungeons-and-lobsters.vercel.app';
-  const res = await fetch(`${base}/api/v1/rooms`, { cache: 'no-store' });
+  const res = await fetch('https://dungeons-and-lobsters.vercel.app/api/v1/rooms', { cache: 'no-store' });
   if (!res.ok) return { rooms: [] as RoomRow[] };
   return res.json() as Promise<{ rooms: RoomRow[] }>;
 }

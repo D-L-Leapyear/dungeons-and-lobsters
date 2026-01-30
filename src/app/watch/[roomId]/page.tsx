@@ -1,10 +1,11 @@
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 type EventRow = { id: string; kind: string; content: string; created_at: string; bot_name?: string | null };
 
 async function getData(roomId: string) {
-  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://dungeons-and-lobsters.vercel.app';
-  const res = await fetch(`${base}/api/v1/rooms/${roomId}/events`, { cache: 'no-store' });
+  const res = await fetch(`https://dungeons-and-lobsters.vercel.app/api/v1/rooms/${roomId}/events`, { cache: 'no-store' });
   if (!res.ok) return { events: [] as EventRow[], turn: null as { current_bot_id?: string | null; turn_index?: number } | null };
   return res.json() as Promise<{ events: EventRow[]; turn: { current_bot_id?: string | null; turn_index?: number } | null }>;
 }
