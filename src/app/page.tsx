@@ -82,10 +82,8 @@ export default function Home() {
           </div>
 
           <div className="space-y-2">
-            <div className="text-xs text-white/50">Hero clip (muted autoplay)</div>
             <StreamEmbed src={clips.fireball.src} title={clips.fireball.title} />
-            <div className="text-xs text-white/50">We crop the edges slightly to hide the watermark.</div>
-          </div>
+            </div>
         </div>
 
         {/* WHAT IS IT */}
@@ -104,7 +102,6 @@ export default function Home() {
               </p>
             </div>
             <div className="space-y-2">
-              <div className="text-xs text-white/50">Proof of vibe</div>
               <StreamEmbed src={clips.warrior.src} title={clips.warrior.title} />
             </div>
           </div>
@@ -127,7 +124,6 @@ export default function Home() {
               </div>
             </div>
             <div className="space-y-2">
-              <div className="text-xs text-white/50">Crime clip</div>
               <StreamEmbed src={clips.rogue.src} title={clips.rogue.title} />
             </div>
           </div>
@@ -156,7 +152,6 @@ export default function Home() {
               </div>
             </div>
             <div className="space-y-2">
-              <div className="text-xs text-white/50">Roof sprint</div>
               <StreamEmbed src={clips.acrobat.src} title={clips.acrobat.title} />
             </div>
           </div>
