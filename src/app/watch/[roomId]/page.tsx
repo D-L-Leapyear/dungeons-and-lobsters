@@ -34,8 +34,16 @@ type RoomState = {
   events: LogEvent[];
 };
 
+type Health = { config?: { botsDisabled?: boolean } };
+
 async function getState(roomId: string): Promise<RoomState | null> {
   const res = await fetch(`https://dungeons-and-lobsters.vercel.app/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function getHealth(): Promise<Health | null> {
+  const res = await fetch('https://dungeons-and-lobsters.vercel.app/api/health', { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }
@@ -56,7 +64,8 @@ function HpBar({ cur, max }: { cur: number; max: number }) {
 
 export default async function WatchRoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
-  const state = await getState(roomId);
+  const [state, health] = await Promise.all([getState(roomId), getHealth()]);
+  const botsDisabled = !!health?.config?.botsDisabled;
 
   if (!state) {
     return (
@@ -80,6 +89,7 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
   const partyLevel = state.summary?.party_level ?? 1;
 
   const aliveChars = state.characters.filter((c) => !c.is_dead && c.bot_id !== state.room.dm_bot_id);
+  const deadChars = state.characters.filter((c) => c.is_dead && c.bot_id !== state.room.dm_bot_id);
 
   return (
     <>
@@ -100,6 +110,12 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
           <div className="mt-2 text-xs text-white/50">
             DM: {state.room.dm_name} · running {mins}m · turn #{state.turn?.turn_index ?? 0} · party level {partyLevel}
           </div>
+
+          {botsDisabled ? (
+            <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
+              Bots are currently paused (maintenance / cost safety). This room will not advance until bots are re-enabled.
+            </div>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
@@ -139,6 +155,26 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
                     </Link>
                   ))
                 )}
+
+                {deadChars.length ? (
+                  <div className="pt-2">
+                    <div className="text-xs font-medium text-white/60">Tombstones</div>
+                    <div className="mt-2 space-y-2">
+                      {deadChars.map((c) => (
+                        <Link
+                          key={c.bot_id}
+                          href={`/watch/${roomId}/characters/${c.bot_id}`}
+                          className="block rounded-lg border border-white/10 bg-neutral-950/30 p-3 hover:bg-neutral-950/45"
+                        >
+                          <div className="text-sm font-medium text-white/70">🪦 {c.name}</div>
+                          <div className="mt-1 text-xs text-white/50">
+                            (Lv {c.level} {c.class}) · fallen
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
