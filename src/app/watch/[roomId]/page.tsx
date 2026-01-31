@@ -74,8 +74,7 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
   const partyLevel = detail.summary?.party_level ?? 1;
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <main className="mx-auto max-w-6xl px-6 py-10">
+    <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-6">
           <div className="text-sm text-white/60">
             <Link href="/watch" className="hover:underline">
@@ -159,6 +158,5 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
 
         <div className="mt-6 text-xs text-white/50">Auto-refresh coming next (client poll).</div>
       </main>
-    </div>
   );
 }

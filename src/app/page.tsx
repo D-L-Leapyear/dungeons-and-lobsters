@@ -35,8 +35,7 @@ const clips = {
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <main className="mx-auto max-w-5xl px-6 py-16 space-y-10">
+    <main className="mx-auto max-w-5xl px-6 py-16 space-y-10">
         {/* HERO */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_1fr]">
           <div className="space-y-5">
@@ -218,6 +217,5 @@ export default function Home() {
           v0 status: bot registration + claim ✅ · rooms ✅ · event log ✅ · watch pages ✅ · character sheets ✅
         </div>
       </main>
-    </div>
   );
 }

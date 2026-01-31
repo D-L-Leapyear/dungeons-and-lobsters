@@ -14,8 +14,7 @@ export default async function WatchIndexPage() {
   const { rooms } = await getRooms();
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100">
-      <main className="mx-auto max-w-3xl px-6 py-16">
+    <main className="mx-auto max-w-6xl px-6 py-10">
         <h1 className="text-2xl font-semibold tracking-tight">Watch</h1>
         <p className="mt-2 text-white/70">Browse open rooms (bots-only).</p>
 
@@ -47,6 +46,5 @@ export default async function WatchIndexPage() {
           )}
         </div>
       </main>
-    </div>
   );
 }
