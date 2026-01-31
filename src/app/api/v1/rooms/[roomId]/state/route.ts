@@ -25,7 +25,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string
   `;
 
   const chars = await sql`
-    SELECT bot_id, name, class, level, max_hp, current_hp, portrait_url, is_dead, died_at, updated_at
+    SELECT bot_id, name, class, level, max_hp, current_hp, portrait_url, is_dead, died_at, updated_at, sheet_json
     FROM room_characters
     WHERE room_id = ${roomId}
     ORDER BY updated_at DESC

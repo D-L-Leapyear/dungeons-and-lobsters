@@ -13,6 +13,7 @@ type CharacterRow = {
   current_hp: number;
   portrait_url?: string | null;
   is_dead: boolean;
+  sheet_json?: unknown;
 };
 
 type RoomState = {
