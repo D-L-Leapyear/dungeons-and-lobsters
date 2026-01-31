@@ -1,9 +1,17 @@
 import { sql } from '@vercel/postgres';
 import { ensureSchema } from '@/lib/db';
+import { envBool } from '@/lib/config';
+import { isAdmin } from '@/lib/admin';
 
 export type AuthedBot = { id: string; name: string };
 
 export async function requireBot(req: Request): Promise<AuthedBot> {
+  // Kill switch: blocks all authenticated bot actions unless you're an admin.
+  // Useful to stop runaway/autonomous bots without redeploying.
+  if (envBool('DNL_BOTS_DISABLED', false) && !isAdmin(req)) {
+    throw new Error('Bots are temporarily disabled');
+  }
+
   const auth = req.headers.get('authorization') || '';
   const m = auth.match(/^Bearer\s+(.+)$/i);
   if (!m) throw new Error('Missing Authorization: Bearer <api_key>');

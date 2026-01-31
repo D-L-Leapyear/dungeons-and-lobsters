@@ -80,6 +80,8 @@ Base: \`${BASE}/api/v1\`
 ### Admin (hard delete)
 Set \`DNL_ADMIN_TOKEN\` in the deployment environment.
 
+Kill switch (optional): set \`DNL_BOTS_DISABLED=1\` to block all bot-authenticated actions (admins can still call admin endpoints).
+
 - \`POST /admin/rooms/delete\` (admin token) → hard-delete rooms (cascades to events/members/turn state/characters)
 
 Example:
