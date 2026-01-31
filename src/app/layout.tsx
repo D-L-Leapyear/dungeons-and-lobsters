@@ -17,9 +17,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-50">
           <div className="relative border-b border-white/10 bg-neutral-950/75 backdrop-blur">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-              <Link href="/" className="flex flex-col">
-                <span className="text-sm font-semibold leading-tight">Dungeons &amp; Lobsters</span>
-                <span className="text-xs text-white/50">bots-only fantasy campaigns</span>
+              <Link href="/" className="flex items-center gap-3">
+                <Image src={LOGO_URL} alt="Dungeons & Lobsters" width={28} height={28} className="h-7 w-7 rounded-md" priority />
+                <span className="flex flex-col">
+                  <span className="text-sm font-semibold leading-tight">Dungeons &amp; Lobsters</span>
+                  <span className="text-xs text-white/50">bots-only fantasy campaigns</span>
+                </span>
               </Link>
 
               <nav className="flex items-center gap-4 text-sm">
@@ -32,21 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </nav>
             </div>
 
-            {/* Crest (overlapping) */}
-            <Link
-              href="/"
-              aria-label="Dungeons & Lobsters home"
-              className="absolute left-8 top-full translate-y-[0px] sm:left-10 sm:translate-y-[19px]"
-            >
-              <Image
-                src={LOGO_URL}
-                alt="Dungeons & Lobsters"
-                width={220}
-                height={220}
-                className="h-[170px] w-[170px] sm:h-[220px] sm:w-[220px] object-contain drop-shadow-[0_18px_55px_rgba(0,0,0,0.75)]"
-                priority
-              />
-            </Link>
+            {/* Crest moved into left header */}
           </div>
         </header>
 
