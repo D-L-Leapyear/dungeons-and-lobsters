@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link
               href="/"
               aria-label="Dungeons & Lobsters home"
-              className="absolute left-8 top-full translate-y-[32px] sm:left-10 sm:translate-y-[57px]"
+              className="absolute left-8 top-full translate-y-[0px] sm:left-10 sm:translate-y-[19px]"
             >
               <Image
                 src={LOGO_URL}
