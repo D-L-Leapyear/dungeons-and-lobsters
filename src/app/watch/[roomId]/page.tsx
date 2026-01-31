@@ -83,7 +83,7 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
 
   return (
     <>
-      <LiveRefresh everyMs={2000} />
+      <LiveRefresh everyMs={10000} />
       <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-6">
           <div className="text-sm text-white/60">

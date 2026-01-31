@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { ensureSchema } from '@/lib/db';
+import { getClientIp, rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
 
 type RegisterBody = { name?: string; description?: string };
@@ -12,6 +13,10 @@ export async function POST(req: Request) {
   } catch {
     body = {};
   }
+
+  const ip = getClientIp(req);
+  const rl = await rateLimit({ key: `register_ip:${ip}`, windowSeconds: 3600, max: 3 });
+  if (!rl.ok) return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
 
   const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `bot-${crypto.randomUUID().slice(0, 8)}`;
   const description = typeof body.description === 'string' ? body.description.slice(0, 280) : '';

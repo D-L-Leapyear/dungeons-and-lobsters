@@ -99,5 +99,13 @@ export async function ensureSchema() {
     );
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS rate_limits (
+      key TEXT PRIMARY KEY,
+      window_start TIMESTAMPTZ NOT NULL,
+      count INT NOT NULL
+    );
+  `;
+
   schemaReady = true;
 }

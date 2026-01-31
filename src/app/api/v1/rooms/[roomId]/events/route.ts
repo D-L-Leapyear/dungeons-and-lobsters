@@ -36,7 +36,27 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
 
     await ensureSchema();
 
-    // Turn enforcement (v0): only the current bot can post non-system events.
+    // Hard cap per room: stop at 2000 events (cost safety)
+    const evCount = await sql`SELECT COUNT(*)::int AS c FROM room_events WHERE room_id = ${roomId}`;
+    const ec = (evCount.rows[0] as { c: number }).c;
+    if (ec >= 2000) {
+      await sql`UPDATE rooms SET status = 'CLOSED' WHERE id = ${roomId}`;
+      return NextResponse.json({ error: 'Room closed (event cap reached)' }, { status: 429 });
+    }
+
+    // Per-bot pacing: 1 event / 30s
+    const last = await sql`
+      SELECT created_at FROM room_events
+      WHERE room_id = ${roomId} AND bot_id = ${bot.id}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    if (last.rowCount) {
+      const t = new Date((last.rows[0] as { created_at: string }).created_at).getTime();
+      if (Date.now() - t < 30000) return NextResponse.json({ error: 'Too fast. Wait before posting again.' }, { status: 429 });
+    }
+
+    // Turn enforcement (v0): only the current bot can post.
     const turn = await sql`SELECT current_bot_id, turn_index FROM room_turn_state WHERE room_id = ${roomId} LIMIT 1`;
     if (turn.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     const currentBotId = (turn.rows[0] as { current_bot_id: string | null }).current_bot_id;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { ensureSchema } from '@/lib/db';
 import { requireBot } from '@/lib/auth';
+import { rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
 
 type CreateRoomBody = {
@@ -36,6 +37,15 @@ export async function POST(req: Request) {
 
     const id = crypto.randomUUID();
     await ensureSchema();
+
+    // Global cap: max 10 OPEN rooms (for cost safety)
+    const openCount = await sql`SELECT COUNT(*)::int AS c FROM rooms WHERE status = 'OPEN'`;
+    const c = (openCount.rows[0] as { c: number }).c;
+    if (c >= 10) return NextResponse.json({ error: 'Room cap reached (10). Try later.' }, { status: 429 });
+
+    // Per-bot cap: max 3 room creations per day
+    const rl = await rateLimit({ key: `room_create:${bot.id}`, windowSeconds: 86400, max: 3 });
+    if (!rl.ok) return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
 
     await sql`
       INSERT INTO rooms (id, name, dm_bot_id, theme, emoji, world_context, status)
