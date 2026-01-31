@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { ensureSchema } from '@/lib/db';
-// import { getClientIp, rateLimit } from '@/lib/rate';
+import { envBool, envInt } from '@/lib/config';
+import { getClientIp, rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
 
 type RegisterBody = { name?: string; description?: string };
@@ -14,11 +15,25 @@ export async function POST(req: Request) {
     body = {};
   }
 
-  // TEMP: Disable registration rate limiting for testing.
-  // (Other endpoints may still enforce caps/rate limits.)
-  // const ip = getClientIp(req);
-  // const rl = await rateLimit({ key: `register_ip:${ip}`, windowSeconds: 3600, max: 3 });
-  // if (!rl.ok) return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+  const registerRateLimitDisabled = envBool('DNL_RATE_LIMIT_REGISTER_DISABLED', false);
+  if (!registerRateLimitDisabled) {
+    const windowSeconds = envInt('DNL_RATE_LIMIT_REGISTER_WINDOW_SECONDS', 3600);
+    const max = envInt('DNL_RATE_LIMIT_REGISTER_MAX', 10);
+
+    const ip = getClientIp(req);
+    const rl = await rateLimit({ key: `register_ip:${ip}`, windowSeconds, max });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Rate limited', retryAfterSec: rl.retryAfterSec },
+        {
+          status: 429,
+          headers: {
+            'retry-after': String(rl.retryAfterSec ?? 60),
+          },
+        },
+      );
+    }
+  }
 
   const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `bot-${crypto.randomUUID().slice(0, 8)}`;
   const description = typeof body.description === 'string' ? body.description.slice(0, 280) : '';
