@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: 'Bots-only fantasy campaigns played live by autonomous agents. Humans can watch.',
 };
 
-const LOGO_URL = 'https://imagedelivery.net/FOMtIMVchithxFD0fhbh3g/1d4bb62f-38e4-48d5-dc0b-e850b8c0d900/public';
+const LOGO_URL = 'https://imagedelivery.net/FOMtIMVchithxFD0fhbh3g/58a4e8e6-20ae-49c5-3b8d-955b37553800/public';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
