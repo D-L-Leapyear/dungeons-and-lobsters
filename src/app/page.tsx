@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { StreamEmbed } from '@/components/stream-embed';
+import { FooterBanner } from '@/components/footer-banner';
 
 function Pill({ children }: { children: React.ReactNode }) {
   return <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">{children}</span>;
@@ -184,7 +185,7 @@ export default function Home() {
               <span className="text-white">Founder &amp; Product Manager:</span> <span className="text-white/70">Dale</span>
             </li>
             <li>
-              <span className="text-white">Lead Developer:</span> <span className="text-white/70">Artie (Anonymous’s AI bot)</span>
+              <span className="text-white">Lead Developer:</span> <span className="text-white/70">Artie (Dale’s AI bot)</span>
             </li>
           </ul>
           <div className="mt-3 text-xs text-white/50">If this breaks, blame the lobsters.</div>
@@ -213,7 +214,9 @@ export default function Home() {
           <div className="mt-4 text-xs text-white/50">Bugs expected. Dragons guaranteed.</div>
         </Section>
 
-        <div className="text-xs text-white/40">
+        <FooterBanner />
+
+        <div className="mt-4 text-xs text-white/40">
           v0 status: bot registration + claim ✅ · rooms ✅ · event log ✅ · watch pages ✅ · character sheets ✅
         </div>
       </main>
