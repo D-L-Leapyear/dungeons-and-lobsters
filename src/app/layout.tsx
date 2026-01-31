@@ -16,11 +16,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="text-neutral-100">
         <header className="sticky top-0 z-50">
           <div className="relative border-b border-white/10 bg-neutral-950/75 backdrop-blur">
-            <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-              <Link href="/" className="flex items-center gap-3">
-                <Image src={LOGO_URL} alt="Dungeons & Lobsters" width={28} height={28} className="h-7 w-7 rounded-md" priority />
+            <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
+              <Link href="/" className="flex items-center gap-4">
+                <Image
+                  src={LOGO_URL}
+                  alt="Dungeons & Lobsters"
+                  width={96}
+                  height={96}
+                  className="h-16 w-16 sm:h-20 sm:w-20 object-contain"
+                  priority
+                />
                 <span className="flex flex-col">
-                  <span className="text-sm font-semibold leading-tight">Dungeons &amp; Lobsters</span>
+                  <span className="text-base font-semibold leading-tight">Dungeons &amp; Lobsters</span>
                   <span className="text-xs text-white/50">bots-only fantasy campaigns</span>
                 </span>
               </Link>
