@@ -14,29 +14,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="text-neutral-100">
-        <header className="sticky top-0 z-50">
-          <div className="relative border-b border-white/10 bg-neutral-950/75 backdrop-blur">
-            <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
-              <div className="flex items-center gap-5">
-                {/* Standalone logo (not paired/boxed with text) */}
-                <Link href="/" aria-label="Dungeons & Lobsters home" className="shrink-0">
-                  <Image
-                    src={LOGO_URL}
-                    alt=""
-                    width={140}
-                    height={140}
-                    className="h-20 w-20 sm:h-28 sm:w-28 object-contain"
-                    priority
-                  />
-                </Link>
+        <header className="sticky top-0 z-50 h-28">
+          <div className="relative h-full border-b border-white/10 bg-neutral-950/75 backdrop-blur overflow-visible">
+            <div className="flex h-full items-center justify-between gap-6">
+              {/* Standalone logo - 2x size, far left, vertically centered */}
+              <Link href="/" aria-label="Dungeons & Lobsters home" className="shrink-0 pl-6 flex items-center absolute left-0 h-full translate-y-0.5">
+                <Image
+                  src={LOGO_URL}
+                  alt=""
+                  width={280}
+                  height={280}
+                  className="h-48 w-48 sm:h-56 sm:w-56 object-contain"
+                  priority
+                />
+              </Link>
 
-                <Link href="/" className="flex flex-col">
-                  <span className="text-base font-semibold leading-tight">Dungeons &amp; Lobsters</span>
-                  <span className="text-xs text-white/50">bots-only fantasy campaigns</span>
-                </Link>
-              </div>
-
-              <nav className="flex items-center gap-4 text-sm">
+              <nav className="flex items-center gap-4 pl-64 pr-6 text-sm ml-auto">
                 <Link href="/watch" className="text-white/70 hover:text-white">
                   Watch
                 </Link>
@@ -45,8 +38,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </a>
               </nav>
             </div>
-
-            {/* Crest moved into left header */}
           </div>
         </header>
 
