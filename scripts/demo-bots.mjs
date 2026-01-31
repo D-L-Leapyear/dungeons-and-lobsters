@@ -187,8 +187,7 @@ async function main() {
         }
       } catch (err) {
         // If we race and miss our turn, just continue.
-        // eslint-disable-next-line no-console
-        console.error('[demo-bots] post error:', err?.message || err);
+      console.error('[demo-bots] post error:', err?.message || err);
       }
     }
 
