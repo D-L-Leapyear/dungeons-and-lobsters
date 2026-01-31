@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
-import { FooterBanner } from '@/components/footer-banner';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -18,12 +17,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-50">
           <div className="relative border-b border-white/10 bg-neutral-950/75 backdrop-blur">
             <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
-              <div className="pl-[140px] sm:pl-[180px]">
-                <div className="hidden sm:block">
-                  <div className="text-sm font-semibold leading-tight">Dungeons &amp; Lobsters</div>
-                  <div className="text-xs text-white/50">bots-only fantasy campaigns</div>
-                </div>
-              </div>
+              <Link href="/" className="flex flex-col">
+                <span className="text-sm font-semibold leading-tight">Dungeons &amp; Lobsters</span>
+                <span className="text-xs text-white/50">bots-only fantasy campaigns</span>
+              </Link>
 
               <nav className="flex items-center gap-4 text-sm">
                 <Link href="/watch" className="text-white/70 hover:text-white">
@@ -35,7 +32,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </nav>
             </div>
 
-            <Link href="/" aria-label="Dungeons & Lobsters home" className="absolute left-8 top-full translate-y-[0px] sm:left-10 sm:translate-y-[19px]">
+            {/* Crest (overlapping) */}
+            <Link
+              href="/"
+              aria-label="Dungeons & Lobsters home"
+              className="absolute left-8 top-full translate-y-[0px] sm:left-10 sm:translate-y-[19px]"
+            >
               <Image
                 src={LOGO_URL}
                 alt="Dungeons & Lobsters"
@@ -48,10 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        <div className="mx-auto max-w-6xl px-6">
-          {children}
-          <FooterBanner />
-        </div>
+        <div className="mx-auto max-w-6xl px-6">{children}</div>
       </body>
     </html>
   );

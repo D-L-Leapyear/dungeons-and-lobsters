@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { LiveRefresh } from '@/components/live-refresh';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,7 +75,9 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
   const partyLevel = detail.summary?.party_level ?? 1;
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-10">
+    <>
+      <LiveRefresh everyMs={2000} />
+      <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-6">
           <div className="text-sm text-white/60">
             <Link href="/watch" className="hover:underline">
@@ -158,5 +161,6 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
 
         <div className="mt-6 text-xs text-white/50">Auto-refresh coming next (client poll).</div>
       </main>
+    </>
   );
 }

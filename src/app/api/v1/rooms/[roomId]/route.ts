@@ -1,45 +1,63 @@
 import { NextResponse } from 'next/server';
 import { ensureSchema } from '@/lib/db';
+import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 
-export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
+type PatchBody = {
+  worldContext?: string;
+  status?: 'OPEN' | 'CLOSED' | 'ARCHIVED';
+  theme?: string;
+  emoji?: string;
+};
+
+function normalizeEmoji(input: unknown) {
+  if (typeof input !== 'string') return undefined;
+  const s = input.trim();
+  if (!s) return undefined;
+  return s.slice(0, 8);
+}
+
+export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
-  await ensureSchema();
+  try {
+    const bot = await requireBot(req);
+    await ensureSchema();
 
-  const roomRes = await sql`
-    SELECT r.id, r.name, r.emoji, r.theme, r.world_context, r.status, r.created_at, r.started_at, r.ended_at,
-           b.name as dm_name
-    FROM rooms r
-    JOIN bots b ON b.id = r.dm_bot_id
-    WHERE r.id = ${roomId}
-    LIMIT 1
-  `;
-  if (roomRes.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404, headers: { 'cache-control': 'no-store' } });
+    const room = await sql`SELECT dm_bot_id FROM rooms WHERE id = ${roomId} LIMIT 1`;
+    if (room.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    const dmBotId = (room.rows[0] as { dm_bot_id: string }).dm_bot_id;
+    if (dmBotId !== bot.id) return NextResponse.json({ error: 'Only DM can update room' }, { status: 403 });
 
-  const members = await sql`
-    SELECT m.bot_id, m.role, m.joined_at, b.name as bot_name
-    FROM room_members m
-    JOIN bots b ON b.id = m.bot_id
-    WHERE m.room_id = ${roomId}
-    ORDER BY (CASE WHEN m.role = 'DM' THEN 0 ELSE 1 END), m.joined_at ASC
-  `;
+    const body = (await req.json().catch(() => ({}))) as PatchBody;
 
-  const chars = await sql`
-    SELECT bot_id, name, class, level, max_hp, current_hp, portrait_url, is_dead, died_at, updated_at
-    FROM room_characters
-    WHERE room_id = ${roomId}
-    ORDER BY updated_at DESC
-  `;
+    const worldContext = typeof body.worldContext === 'string' ? body.worldContext.trim().slice(0, 20000) : undefined;
+    const status = body.status && ['OPEN', 'CLOSED', 'ARCHIVED'].includes(body.status) ? body.status : undefined;
+    const theme = typeof body.theme === 'string' ? body.theme.trim().slice(0, 280) : undefined;
+    const emoji = normalizeEmoji(body.emoji);
 
-  const summary = await sql`SELECT room_id, party_level, party_current_hp, party_max_hp, updated_at FROM room_summary WHERE room_id = ${roomId} LIMIT 1`;
+    await sql`
+      UPDATE rooms
+      SET
+        world_context = COALESCE(${worldContext}, world_context),
+        status = COALESCE(${status}, status),
+        theme = COALESCE(${theme}, theme),
+        emoji = COALESCE(${emoji}, emoji)
+      WHERE id = ${roomId}
+    `;
 
-  return NextResponse.json(
-    {
-      room: roomRes.rows[0],
-      members: members.rows,
-      characters: chars.rows,
-      summary: summary.rows[0] ?? null,
-    },
-    { headers: { 'cache-control': 'no-store' } },
-  );
+    return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return NextResponse.json({ error: msg }, { status: 401 });
+  }
+}
+
+// Proxy GET to state endpoint
+export async function GET(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
+  const { roomId } = await ctx.params;
+  const url = new URL(req.url);
+  url.pathname = `/api/v1/rooms/${roomId}/state`;
+  const res = await fetch(url.toString(), { cache: 'no-store' });
+  const text = await res.text();
+  return new NextResponse(text, { status: res.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }
