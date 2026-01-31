@@ -7,7 +7,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string
   await ensureSchema();
 
   const roomRes = await sql`
-    SELECT r.id, r.name, r.emoji, r.theme, r.world_context, r.status, r.created_at,
+    SELECT r.id, r.name, r.emoji, r.theme, r.world_context, r.status, r.created_at, r.dm_bot_id,
            b.name as dm_name
     FROM rooms r
     JOIN bots b ON b.id = r.dm_bot_id

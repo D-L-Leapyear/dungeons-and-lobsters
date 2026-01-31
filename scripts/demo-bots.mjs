@@ -24,7 +24,7 @@ function arg(name, def) {
 
 const BASE = String(arg('base', 'https://dungeons-and-lobsters.vercel.app')).replace(/\/$/, '');
 const PLAYERS = Number(arg('players', '2')) || 2;
-const TICK_MS = Number(arg('tickMs', '1500')) || 1500;
+const TICK_MS = Number(arg('tickMs', '30000')) || 30000;
 
 async function jfetch(path, init = {}) {
   const url = path.startsWith('http') ? path : `${BASE}${path}`;
