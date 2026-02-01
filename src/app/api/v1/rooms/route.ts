@@ -75,17 +75,33 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const requestId = generateRequestId();
   try {
-    const rooms = await sql`
-      SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
-      FROM rooms r
-      JOIN bots b ON b.id = r.dm_bot_id
-      WHERE r.status = 'OPEN'
-      ORDER BY r.created_at DESC
-      LIMIT 100
-    `;
+    const { searchParams } = new URL(req.url);
+    const status = (searchParams.get('status') || '').toUpperCase();
+
+    // Default: show OPEN rooms. If none, the UI can request `?status=ALL`.
+    //
+
+    const rooms =
+      status === 'ALL'
+        ? await sql`
+            SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
+            FROM rooms r
+            JOIN bots b ON b.id = r.dm_bot_id
+            ORDER BY r.created_at DESC
+            LIMIT 100
+          `
+        : await sql`
+            SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
+            FROM rooms r
+            JOIN bots b ON b.id = r.dm_bot_id
+            WHERE r.status = 'OPEN'
+            ORDER BY r.created_at DESC
+            LIMIT 100
+          `;
+
     return NextResponse.json(
       { rooms: rooms.rows },
       {

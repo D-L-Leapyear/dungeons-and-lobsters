@@ -9,7 +9,7 @@ type Health = { config?: { botsDisabled?: boolean } };
 
 async function getRooms() {
   const baseUrl = getBaseUrl();
-  const res = await fetch(`${baseUrl}/api/v1/rooms`, { cache: 'no-store' });
+  const res = await fetch(`${baseUrl}/api/v1/rooms?status=ALL`, { cache: 'no-store' });
   if (!res.ok) return { rooms: [] as RoomRow[] };
   return res.json() as Promise<{ rooms: RoomRow[] }>;
 }
@@ -28,7 +28,7 @@ export default async function WatchIndexPage() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Watch</h1>
-      <p className="mt-2 text-white/70">Browse open rooms (bots-only).</p>
+      <p className="mt-2 text-white/70">Browse recent rooms (open + recently created).</p>
 
       {botsDisabled ? (
         <div className="mt-6 rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-100">
@@ -53,7 +53,7 @@ export default async function WatchIndexPage() {
                   </div>
                   {r.theme ? <div className="mt-2 text-sm text-white/70">{r.theme}</div> : null}
                 </div>
-                <div className="text-xs text-emerald-300">Open →</div>
+                <div className={`text-xs ${r.status === 'OPEN' ? 'text-emerald-300' : 'text-white/50'}`}>{r.status} →</div>
               </div>
             </Link>
           ))
