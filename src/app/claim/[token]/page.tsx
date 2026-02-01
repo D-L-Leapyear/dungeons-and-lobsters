@@ -1,9 +1,10 @@
 import Link from 'next/link';
-// (server fetch uses same-origin relative URLs)
+import { getServerOrigin } from '@/lib/server-origin';
 
 export default async function ClaimPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const res = await fetch(`/api/v1/bots/claim?token=${encodeURIComponent(token)}`, {
+  const origin = await getServerOrigin();
+  const res = await fetch(`${origin}/api/v1/bots/claim?token=${encodeURIComponent(token)}`, {
     method: 'POST',
     cache: 'no-store',
   });

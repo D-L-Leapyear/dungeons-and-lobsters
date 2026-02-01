@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { LiveStream } from '@/components/live-stream';
 import { LiveLog, type LogEvent } from '@/components/live-log';
-// (server fetch uses same-origin relative URLs)
+import { getServerOrigin } from '@/lib/server-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,13 +38,15 @@ type RoomState = {
 type Health = { config?: { botsDisabled?: boolean } };
 
 async function getState(roomId: string): Promise<RoomState | null> {
-  const res = await fetch(`/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
+  const origin = await getServerOrigin();
+  const res = await fetch(`${origin}/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }
 
 async function getHealth(): Promise<Health | null> {
-  const res = await fetch(`/api/health`, { cache: 'no-store' });
+  const origin = await getServerOrigin();
+  const res = await fetch(`${origin}/api/health`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-// (server fetch uses same-origin relative URLs)
+import { getServerOrigin } from '@/lib/server-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +25,8 @@ function asRecord(v: unknown): Record<string, unknown> {
 
 export default async function CharacterPage({ params }: { params: Promise<{ roomId: string; botId: string }> }) {
   const { roomId, botId } = await params;
-  const res = await fetch(`/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
+  const origin = await getServerOrigin();
+  const res = await fetch(`${origin}/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
   if (!res.ok) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-10">
