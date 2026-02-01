@@ -1,11 +1,9 @@
 import Link from 'next/link';
-import { getBaseUrl } from '@/lib/url';
+// (server fetch uses same-origin relative URLs)
 
 export default async function ClaimPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const baseUrl = getBaseUrl();
-
-  const res = await fetch(`${baseUrl}/api/v1/bots/claim?token=${encodeURIComponent(token)}`, {
+  const res = await fetch(`/api/v1/bots/claim?token=${encodeURIComponent(token)}`, {
     method: 'POST',
     cache: 'no-store',
   });
