@@ -8,148 +8,155 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 /**
- * Server-Sent Events (SSE) endpoint for real-time room updates.
- * Clients can subscribe to this stream to receive updates when room state changes.
+ * Server-Sent Events (SSE) endpoint.
+ *
+ * Design goal: notify watchers that *something changed* without streaming full state.
+ * The client simply calls `router.refresh()` on a `refresh` event.
+ *
+ * Notes:
+ * - We poll the DB (no LISTEN/NOTIFY yet), but we only emit when there is a change.
+ * - We use (created_at, id) as a stable cursor; UUID ordering is NOT time ordering.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
   const requestId = generateRequestId();
 
   try {
     requireValidUUID(roomId, 'roomId');
 
-    // Verify room exists
     const roomCheck = await sql`SELECT id FROM rooms WHERE id = ${roomId} LIMIT 1`;
     if (roomCheck.rowCount === 0) {
       const { status, response } = handleApiError(new Error('Room not found'), requestId);
       return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
 
-  // Create a readable stream for SSE
-  const stream = new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      let lastEventId: string | null = null;
-      let isClosed = false;
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let isClosed = false;
 
-      // Send initial connection message
-      const send = (data: string) => {
-        if (!isClosed) {
-          controller.enqueue(encoder.encode(data));
-        }
-      };
+        // Cursor for events (created_at + id)
+        let lastEventCreatedAt: string | null = null;
+        let lastEventId: string | null = null;
 
-      // Send SSE formatted message
-      const sendEvent = (event: string, data: unknown, id?: string) => {
-        const lines = [
-          `event: ${event}`,
-          `data: ${JSON.stringify(data)}`,
-          ...(id ? [`id: ${id}`] : []),
-          '', // Empty line to end the event
-        ];
-        send(lines.join('\n'));
-      };
+        // Change tokens for other tables
+        let lastTurnUpdatedAt: string | null = null;
+        let lastSummaryUpdatedAt: string | null = null;
+        let lastCharsUpdatedAt: string | null = null;
 
-      // Send initial ping
-      sendEvent('ping', { timestamp: Date.now() });
+        const send = (data: string) => {
+          if (!isClosed) controller.enqueue(encoder.encode(data));
+        };
 
-      // Polling interval (every 2 seconds)
-      const pollInterval = 2000;
-      let pollTimer: NodeJS.Timeout | null = null;
+        const sendEvent = (event: string, data: unknown) => {
+          send(`event: ${event}\n`);
+          send(`data: ${JSON.stringify(data)}\n\n`);
+        };
 
-      const poll = async () => {
-        if (isClosed) return;
+        // Initial hello (client can ignore)
+        sendEvent('ping', { t: Date.now() });
 
-        try {
-          // Get latest events since last check
-          const eventsQuery = lastEventId
-            ? sql`
-                SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
-                FROM room_events e
-                LEFT JOIN bots b ON b.id = e.bot_id
-                WHERE e.room_id = ${roomId} AND e.id > ${lastEventId}
-                ORDER BY e.created_at ASC
+        const pollIntervalMs = 2000;
+        let pollTimer: NodeJS.Timeout | null = null;
+
+        const poll = async () => {
+          if (isClosed) return;
+
+          try {
+            // 1) Check for new events using a stable cursor
+            let newEventsCount = 0;
+            if (lastEventCreatedAt && lastEventId) {
+              const ev = await sql`
+                SELECT id, created_at
+                FROM room_events
+                WHERE room_id = ${roomId}
+                  AND (created_at, id) > (${lastEventCreatedAt}::timestamptz, ${lastEventId})
+                ORDER BY created_at ASC, id ASC
                 LIMIT 50
-              `
-            : sql`
-                SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
-                FROM room_events e
-                LEFT JOIN bots b ON b.id = e.bot_id
-                WHERE e.room_id = ${roomId}
-                ORDER BY e.created_at DESC
-                LIMIT 10
               `;
-
-          const events = await eventsQuery;
-
-          // Get current turn state
-          const turn = await sql`SELECT room_id, current_bot_id, turn_index, updated_at FROM room_turn_state WHERE room_id = ${roomId} LIMIT 1`;
-
-          // Get characters (for HP updates)
-          const chars = await sql`
-            SELECT bot_id, name, class, level, max_hp, current_hp, is_dead, updated_at
-            FROM room_characters
-            WHERE room_id = ${roomId}
-            ORDER BY updated_at DESC
-          `;
-
-          // Get summary
-          const summary = await sql`SELECT room_id, party_level, party_current_hp, party_max_hp, updated_at FROM room_summary WHERE room_id = ${roomId} LIMIT 1`;
-
-          // Send updates
-          if (events.rows.length > 0) {
-            // Send new events
-            for (const event of events.rows) {
-              sendEvent('event', event, event.id as string);
-              lastEventId = event.id as string;
+              newEventsCount = ev.rowCount ?? 0;
+              if (newEventsCount > 0) {
+                const last = ev.rows[ev.rows.length - 1] as { id: string; created_at: string };
+                lastEventCreatedAt = last.created_at;
+                lastEventId = last.id;
+              }
+            } else {
+              // Bootstrap cursor from most recent event (if any)
+              const last = await sql`
+                SELECT id, created_at
+                FROM room_events
+                WHERE room_id = ${roomId}
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+              `;
+              if ((last.rowCount ?? 0) > 0) {
+                const row = last.rows[0] as { id: string; created_at: string };
+                lastEventCreatedAt = row.created_at;
+                lastEventId = row.id;
+              }
             }
+
+            // 2) Check updated_at tokens
+            const [turn, summary, charsLatest] = await Promise.all([
+              sql`SELECT updated_at FROM room_turn_state WHERE room_id = ${roomId} LIMIT 1`,
+              sql`SELECT updated_at FROM room_summary WHERE room_id = ${roomId} LIMIT 1`,
+              sql`SELECT updated_at FROM room_characters WHERE room_id = ${roomId} ORDER BY updated_at DESC LIMIT 1`,
+            ]);
+
+            const turnUpdatedAt = (turn.rows[0] as { updated_at?: string } | undefined)?.updated_at ?? null;
+            const summaryUpdatedAt = (summary.rows[0] as { updated_at?: string } | undefined)?.updated_at ?? null;
+            const charsUpdatedAt = (charsLatest.rows[0] as { updated_at?: string } | undefined)?.updated_at ?? null;
+
+            const turnChanged = Boolean(turnUpdatedAt && turnUpdatedAt !== lastTurnUpdatedAt);
+            const summaryChanged = Boolean(summaryUpdatedAt && summaryUpdatedAt !== lastSummaryUpdatedAt);
+            const charsChanged = Boolean(charsUpdatedAt && charsUpdatedAt !== lastCharsUpdatedAt);
+
+            if (turnUpdatedAt) lastTurnUpdatedAt = turnUpdatedAt;
+            if (summaryUpdatedAt) lastSummaryUpdatedAt = summaryUpdatedAt;
+            if (charsUpdatedAt) lastCharsUpdatedAt = charsUpdatedAt;
+
+            const anythingChanged = newEventsCount > 0 || turnChanged || summaryChanged || charsChanged;
+            if (anythingChanged) {
+              // Single lightweight notification; client refreshes full SSR state.
+              sendEvent('refresh', {
+                t: Date.now(),
+                newEvents: newEventsCount,
+                turnChanged,
+                summaryChanged,
+                charsChanged,
+              });
+            } else {
+              // Keep-alive so proxies don’t kill the connection.
+              sendEvent('ping', { t: Date.now() });
+            }
+          } catch (error) {
+            console.error('[SSE] Poll error:', error);
+            sendEvent('error', { message: 'Poll failed' });
+          } finally {
+            pollTimer = setTimeout(poll, pollIntervalMs);
           }
+        };
 
-          // Send turn update
-          sendEvent('turn', turn.rows[0] ?? null);
+        poll();
 
-          // Send characters update
-          sendEvent('characters', chars.rows);
-
-          // Send summary update
-          sendEvent('summary', summary.rows[0] ?? null);
-
-          // Schedule next poll
-          pollTimer = setTimeout(poll, pollInterval);
-        } catch (error) {
-          console.error('[SSE] Poll error:', error);
-          sendEvent('error', { message: 'Poll failed' });
-          // Continue polling even on error
-          pollTimer = setTimeout(poll, pollInterval);
-        }
-      };
-
-      // Start polling
-      poll();
-
-      // Handle client disconnect
-      if (_req.signal) {
-        _req.signal.addEventListener('abort', () => {
+        req.signal?.addEventListener('abort', () => {
           isClosed = true;
-          if (pollTimer) {
-            clearTimeout(pollTimer);
-          }
+          if (pollTimer) clearTimeout(pollTimer);
           try {
             controller.close();
           } catch {
-            // Already closed
+            // ignore
           }
         });
-      }
-    },
-  });
+      },
+    });
 
     return new NextResponse(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no', // Disable nginx buffering
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
         'x-request-id': requestId,
       },
     });
@@ -158,4 +165,3 @@ export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string
     return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }
-

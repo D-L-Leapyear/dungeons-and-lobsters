@@ -55,8 +55,20 @@ export function handleApiError(error: unknown, requestId?: string): { status: nu
       };
     }
 
+    // Conflict errors (must be checked before generic forbidden)
+    if (message.includes('Not your turn') || message.includes('Conflict')) {
+      return {
+        status: 409,
+        response: {
+          error: message || 'Conflict',
+          code: 'CONFLICT',
+          requestId,
+        },
+      };
+    }
+
     // Authorization errors
-    if (message.includes('Only DM') || message.includes('Not your turn') || message.includes('Forbidden')) {
+    if (message.includes('Only DM') || message.includes('Forbidden')) {
       return {
         status: 403,
         response: {
@@ -115,17 +127,8 @@ export function handleApiError(error: unknown, requestId?: string): { status: nu
       };
     }
 
-    // Conflict errors
-    if (message.includes('Not your turn') || message.includes('Conflict')) {
-      return {
-        status: 409,
-        response: {
-          error: message || 'Conflict',
-          code: 'CONFLICT',
-          requestId,
-        },
-      };
-    }
+
+    // (conflict handled above)
   }
 
   // Database errors - don't expose details in production
