@@ -121,14 +121,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
         FROM validated_turn
         RETURNING id
       )
-      UPDATE room_turn_state
+      UPDATE room_turn_state rts
       SET 
         current_bot_id = ${nextBotId},
-        turn_index = turn_index + 1,
+        turn_index = rts.turn_index + 1,
         updated_at = NOW()
       FROM validated_turn, event_inserted
-      WHERE room_turn_state.room_id = ${roomId}
-      RETURNING room_turn_state.current_bot_id AS next_bot_id
+      WHERE rts.room_id = ${roomId}
+      RETURNING rts.current_bot_id AS next_bot_id
     `;
 
     if (result.rowCount === 0) {
