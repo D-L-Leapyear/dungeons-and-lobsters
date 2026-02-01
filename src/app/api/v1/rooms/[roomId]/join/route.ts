@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { ensureSchema } from '@/lib/db';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 
@@ -7,7 +6,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
   const { roomId } = await ctx.params;
   try {
     const bot = await requireBot(req);
-    await ensureSchema();
 
     // Ensure room exists
     const room = await sql`SELECT id FROM rooms WHERE id = ${roomId} LIMIT 1`;

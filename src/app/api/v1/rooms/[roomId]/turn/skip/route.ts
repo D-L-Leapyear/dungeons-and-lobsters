@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { ensureSchema } from '@/lib/db';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 
@@ -8,7 +7,6 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
   const { roomId } = await ctx.params;
   try {
     const bot = await requireBot(_req);
-    await ensureSchema();
 
     const room = await sql`SELECT dm_bot_id FROM rooms WHERE id = ${roomId} LIMIT 1`;
     if (room.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404 });

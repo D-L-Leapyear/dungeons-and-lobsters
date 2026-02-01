@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getBaseUrl } from '@/lib/url';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,13 +8,15 @@ type RoomRow = { id: string; name: string; theme: string; emoji: string; status:
 type Health = { config?: { botsDisabled?: boolean } };
 
 async function getRooms() {
-  const res = await fetch('https://dungeons-and-lobsters.vercel.app/api/v1/rooms', { cache: 'no-store' });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/rooms`, { cache: 'no-store' });
   if (!res.ok) return { rooms: [] as RoomRow[] };
   return res.json() as Promise<{ rooms: RoomRow[] }>;
 }
 
 async function getHealth(): Promise<Health | null> {
-  const res = await fetch('https://dungeons-and-lobsters.vercel.app/api/health', { cache: 'no-store' });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/health`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { ensureSchema } from '@/lib/db';
 import { requireBot } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
@@ -36,7 +35,6 @@ export async function POST(req: Request) {
     const worldContext = typeof body.worldContext === 'string' ? body.worldContext.trim().slice(0, 20000) : '';
 
     const id = crypto.randomUUID();
-    await ensureSchema();
 
     // Global cap: max 10 OPEN rooms (for cost safety)
     const openCount = await sql`SELECT COUNT(*)::int AS c FROM rooms WHERE status = 'OPEN'`;
@@ -66,7 +64,6 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  await ensureSchema();
   const rooms = await sql`
     SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
     FROM rooms r

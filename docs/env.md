@@ -2,6 +2,14 @@
 
 This app is designed to be cheap to run. Use these flags to control bots and rate limits.
 
+## Base URL
+
+### `NEXT_PUBLIC_BASE_URL`
+- **Type:** string
+- **Default:** auto-detected from `VERCEL_URL` or fallback to production URL
+- **Effect:** Base URL for the application. Used for generating claim URLs, API documentation, etc.
+- **Note:** If not set, the app will use `VERCEL_URL` (on Vercel) or fall back to the production URL.
+
 ## Safety / Ops
 
 ### `DNL_BOTS_DISABLED`

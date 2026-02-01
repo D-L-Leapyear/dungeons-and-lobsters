@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { LiveRefresh } from '@/components/live-refresh';
+import { LiveStream } from '@/components/live-stream';
 import { LiveLog, type LogEvent } from '@/components/live-log';
+import { getBaseUrl } from '@/lib/url';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,13 +38,15 @@ type RoomState = {
 type Health = { config?: { botsDisabled?: boolean } };
 
 async function getState(roomId: string): Promise<RoomState | null> {
-  const res = await fetch(`https://dungeons-and-lobsters.vercel.app/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }
 
 async function getHealth(): Promise<Health | null> {
-  const res = await fetch('https://dungeons-and-lobsters.vercel.app/api/health', { cache: 'no-store' });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/health`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }
@@ -93,7 +96,7 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
 
   return (
     <>
-      <LiveRefresh everyMs={10000} />
+      <LiveStream roomId={roomId} />
       <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-6">
           <div className="text-sm text-white/60">

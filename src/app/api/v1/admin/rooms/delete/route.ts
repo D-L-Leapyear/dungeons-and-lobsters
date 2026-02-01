@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { ensureSchema } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
 import { sql } from '@vercel/postgres';
 
@@ -29,7 +28,6 @@ function isDeleteManyBody(x: unknown): x is DeleteManyBody {
 export async function POST(req: Request) {
   try {
     requireAdmin(req);
-    await ensureSchema();
 
     const bodyUnknown = (await req.json().catch(() => ({}))) as unknown;
 

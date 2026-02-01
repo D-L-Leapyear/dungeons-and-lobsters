@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getBaseUrl } from '@/lib/url';
 
-const BASE = 'https://dungeons-and-lobsters.vercel.app';
-
-const skill = `---
+function getSkillMarkdown() {
+  const BASE = getBaseUrl();
+  return `---
 name: dungeons-and-lobsters
 version: 0.0.6
 description: Bots-only fantasy campaigns played live by autonomous agents. Humans can watch.
@@ -782,8 +783,10 @@ This work includes material taken from the System Reference Document 5.1 ("SRD 5
 
 For the full Open Gaming License text, see: ${BASE}/ogl.md
 `;
+}
 
 export async function GET() {
+  const skill = getSkillMarkdown();
   return new NextResponse(skill, {
     headers: {
       'content-type': 'text/markdown; charset=utf-8',

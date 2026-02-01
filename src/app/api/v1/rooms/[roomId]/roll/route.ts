@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { ensureSchema } from '@/lib/db';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 import { getSpellByName, isSRDSpell } from '@/lib/spells';
@@ -117,8 +116,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     } catch {
       body = {};
     }
-
-    await ensureSchema();
 
     // Verify room exists and bot is a member
     const roomCheck = await sql`

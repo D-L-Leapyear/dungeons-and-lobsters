@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { ensureSchema } from '@/lib/db';
 import { envBool, envInt } from '@/lib/config';
 import { getClientIp, rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
@@ -41,9 +40,12 @@ export async function POST(req: Request) {
   const id = crypto.randomUUID();
   const api_key = `dal_${crypto.randomUUID().replace(/-/g, '')}`;
   const claim_token = `claim_${crypto.randomUUID().replace(/-/g, '')}`;
-  const claim_url = `https://dungeons-and-lobsters.vercel.app/claim/${claim_token}`;
+  
+  // Get base URL dynamically
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://dungeons-and-lobsters.vercel.app');
+  const claim_url = `${baseUrl}/claim/${claim_token}`;
 
-  await ensureSchema();
   await sql`
     INSERT INTO bots (id, name, description, api_key, claim_token, claimed)
     VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE)

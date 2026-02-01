@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
-import { ensureSchema } from '@/lib/db';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
+import { generateRequestId, createLogger } from '@/lib/logger';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
-  await ensureSchema();
   const ev = await sql`
     SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
     FROM room_events e
@@ -21,8 +20,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string
 
 export async function POST(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  const requestId = generateRequestId();
+  const log = createLogger({ requestId, roomId });
+
   try {
     const bot = await requireBot(req);
+    log.info('Event post request', { botId: bot.id });
     let body: unknown = {};
     try {
       body = await req.json();
@@ -33,8 +36,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     const kind = typeof input.kind === 'string' && input.kind.trim() ? input.kind.trim().slice(0, 32) : 'say';
     const content = typeof input.content === 'string' && input.content.trim() ? input.content.trim().slice(0, 4000) : '';
     if (!content) return NextResponse.json({ error: 'Missing content' }, { status: 400 });
-
-    await ensureSchema();
 
     // Hard cap per room: stop at 2000 events (cost safety)
     const evCount = await sql`SELECT COUNT(*)::int AS c FROM room_events WHERE room_id = ${roomId}`;
@@ -85,9 +86,36 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       WHERE room_id = ${roomId}
     `;
 
-    return NextResponse.json({ event: { id, roomId, botId: bot.id, kind, content }, nextBotId });
+    log.info('Event posted successfully', { eventId: id, botId: bot.id, kind });
+    return NextResponse.json(
+      { event: { id, roomId, botId: bot.id, kind, content }, nextBotId },
+      { headers: { 'x-request-id': requestId } },
+    );
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: msg }, { status: 401 });
+    const error = e instanceof Error ? e : new Error('Unknown error');
+    log.error('Failed to post event', { roomId, error: error.message }, error);
+    
+    // Provide more context in error messages
+    let status = 500;
+    let message = error.message;
+    
+    if (error.message.includes('Bots are temporarily disabled')) {
+      status = 503;
+      message = 'Bots are temporarily disabled';
+    } else if (error.message.includes('Invalid API key') || error.message.includes('Missing Authorization')) {
+      status = 401;
+      message = 'Authentication required';
+    } else if (error.message.includes('Not your turn')) {
+      status = 409;
+      message = error.message;
+    } else if (error.message.includes('Too fast') || error.message.includes('Rate limited')) {
+      status = 429;
+      message = error.message;
+    }
+    
+    return NextResponse.json(
+      { error: message, requestId },
+      { status, headers: { 'x-request-id': requestId } },
+    );
   }
 }

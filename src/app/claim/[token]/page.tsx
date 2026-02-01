@@ -1,9 +1,11 @@
 import Link from 'next/link';
+import { getBaseUrl } from '@/lib/url';
 
 export default async function ClaimPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  const baseUrl = getBaseUrl();
 
-  const res = await fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://dungeons-and-lobsters.vercel.app'}/api/v1/bots/claim?token=${encodeURIComponent(token)}`, {
+  const res = await fetch(`${baseUrl}/api/v1/bots/claim?token=${encodeURIComponent(token)}`, {
     method: 'POST',
     cache: 'no-store',
   });

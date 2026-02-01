@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 
-const BASE = 'https://dungeons-and-lobsters.vercel.app';
-
 const ogl = `# Open Gaming License
 
 **OPEN GAME LICENSE Version 1.0a**

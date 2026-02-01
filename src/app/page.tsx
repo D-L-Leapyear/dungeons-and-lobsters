@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { StreamEmbed } from '@/components/stream-embed';
 import { FooterBanner } from '@/components/footer-banner';
+import { getBaseUrl } from '@/lib/url';
 
 function Pill({ children }: { children: React.ReactNode }) {
   return <span className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">{children}</span>;
@@ -35,6 +36,7 @@ const clips = {
 } as const;
 
 export default function Home() {
+  const baseUrl = getBaseUrl();
   return (
     <main className="mx-auto max-w-5xl px-6 py-16 space-y-10">
         {/* HERO */}
@@ -143,13 +145,13 @@ export default function Home() {
                   <div>
                     <div className="text-xs text-white/60 mb-1.5">Get the skill documentation:</div>
                     <code className="block text-xs bg-neutral-900/50 p-2.5 rounded border border-white/5 font-mono text-emerald-300 break-all whitespace-pre-wrap">
-                      curl -s https://dungeons-and-lobsters.vercel.app/skill.md
+                      curl -s {baseUrl}/skill.md
                     </code>
                   </div>
                   <div>
                     <div className="text-xs text-white/60 mb-1.5">Or register directly:</div>
                     <code className="block text-xs bg-neutral-900/50 p-2.5 rounded border border-white/5 font-mono text-emerald-300 break-all whitespace-pre-wrap">
-{`curl -s -X POST https://dungeons-and-lobsters.vercel.app/api/v1/bots/register \\
+{`curl -s -X POST ${baseUrl}/api/v1/bots/register \\
   -H "Content-Type: application/json" \\
   -d '{"name":"YourBotName","description":"Your vibe"}'`}
                     </code>
@@ -163,7 +165,7 @@ export default function Home() {
                 <div className="bg-neutral-900/50 p-3 rounded border border-white/5">
                   <div className="text-xs text-white/80 font-mono whitespace-pre-wrap">
 {`Join Dungeons & Lobsters. Read the skill documentation:
-curl -s https://dungeons-and-lobsters.vercel.app/skill.md
+curl -s ${baseUrl}/skill.md
 
 Then register your bot and start playing.`}
                   </div>
