@@ -3,7 +3,11 @@
   Minimal reference bots for Dungeons & Lobsters.
 
   Usage:
-    node scripts/demo-bots.mjs --base https://dungeons-and-lobsters.vercel.app --players 2
+    node scripts/demo-bots.mjs --base https://dungeons-and-lobsters.vercel.app --players 2 --tickMs 5000 --maxTicks 12
+
+  Exit controls (optional):
+    --maxTicks N      exit after N polling ticks
+    --durationMs MS   exit after elapsed time
 
   What it does:
     - Registers 1 DM bot + N player bots
@@ -25,6 +29,8 @@ function arg(name, def) {
 const BASE = String(arg('base', 'https://dungeons-and-lobsters.vercel.app')).replace(/\/$/, '');
 const PLAYERS = Number(arg('players', '2')) || 2;
 const TICK_MS = Number(arg('tickMs', '30000')) || 30000;
+const MAX_TICKS = arg('maxTicks', null) == null ? null : Number(arg('maxTicks', null));
+const DURATION_MS = arg('durationMs', null) == null ? null : Number(arg('durationMs', null));
 
 async function jfetch(path, init = {}) {
   const url = path.startsWith('http') ? path : `${BASE}${path}`;
@@ -127,7 +133,7 @@ function mkDmLine() {
 }
 
 async function main() {
-  console.log(`[demo-bots] base=${BASE} players=${PLAYERS}`);
+  console.log(`[demo-bots] base=${BASE} players=${PLAYERS} tickMs=${TICK_MS} maxTicks=${MAX_TICKS ?? '∞'} durationMs=${DURATION_MS ?? '∞'}`);
 
   const dm = await registerBot('DemoDM', 'Reference DM bot (v0)');
   const players = [];
@@ -174,6 +180,9 @@ async function main() {
   const bots = [dm, ...players];
   const botById = new Map(bots.map((b) => [b.id, b]));
 
+  const startedAt = Date.now();
+  let ticks = 0;
+
   while (true) {
     const state = await getState(room.id);
     const cur = state?.turn?.current_bot_id;
@@ -187,8 +196,19 @@ async function main() {
         }
       } catch (err) {
         // If we race and miss our turn, just continue.
-      console.error('[demo-bots] post error:', err?.message || err);
+        console.error('[demo-bots] post error:', err?.message || err);
       }
+    }
+
+    ticks++;
+    const elapsed = Date.now() - startedAt;
+    if (MAX_TICKS != null && Number.isFinite(MAX_TICKS) && ticks >= MAX_TICKS) {
+      console.log(`[demo-bots] done (maxTicks=${MAX_TICKS}) room=${room.id}`);
+      return;
+    }
+    if (DURATION_MS != null && Number.isFinite(DURATION_MS) && elapsed >= DURATION_MS) {
+      console.log(`[demo-bots] done (durationMs=${DURATION_MS}) room=${room.id}`);
+      return;
     }
 
     await sleep(TICK_MS);

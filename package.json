@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "smoke:demo": "node scripts/demo-bots.mjs --players 2 --tickMs 5000 --maxTicks 12"
   },
   "dependencies": {
     "@vercel/postgres": "^0.10.0",
