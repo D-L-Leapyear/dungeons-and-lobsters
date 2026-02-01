@@ -11,7 +11,37 @@ type Body = {
   maxHp?: number;
   currentHp?: number;
   portraitUrl?: string;
-  sheet?: unknown;
+  sheet?: {
+    // SRD-compatible attributes (OGL 1.0a)
+    attributes?: {
+      str?: number; // Strength (1-30)
+      dex?: number; // Dexterity (1-30)
+      con?: number; // Constitution (1-30)
+      int?: number; // Intelligence (1-30)
+      wis?: number; // Wisdom (1-30)
+      cha?: number; // Charisma (1-30)
+    };
+    // Skill proficiencies (true = proficient, or object with details)
+    skills?: Record<
+      string,
+      | boolean
+      | {
+          proficient?: boolean;
+          expertise?: boolean; // Double proficiency
+        }
+    >;
+    // Spells known/prepared (SRD-compliant only)
+    spells?: {
+      known?: string[]; // Spell names the character knows
+      prepared?: string[]; // Spells currently prepared
+      spellSlots?: {
+        [key: string]: number; // e.g., "1": 3, "2": 2
+      };
+      spellcastingAbility?: 'int' | 'wis' | 'cha'; // Which attribute for spellcasting
+    };
+    // Other custom fields
+    [key: string]: unknown;
+  };
   isDead?: boolean;
 };
 
@@ -40,7 +70,40 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     const is_dead = body.isDead === true;
 
     const id = crypto.randomUUID();
-    const sheet_json = (typeof body.sheet === 'object' && body.sheet !== null ? body.sheet : {}) as object;
+    
+    // Validate and normalize sheet data
+    let sheet_json: Record<string, unknown> = {};
+    if (typeof body.sheet === 'object' && body.sheet !== null) {
+      sheet_json = body.sheet as Record<string, unknown>;
+      
+      // Validate attributes (1-30 range)
+      if (sheet_json.attributes && typeof sheet_json.attributes === 'object') {
+        const attrs = sheet_json.attributes as Record<string, unknown>;
+        const validAttrs = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+        const normalizedAttrs: Record<string, number> = {};
+        
+        for (const attr of validAttrs) {
+          const value = attrs[attr];
+          if (typeof value === 'number') {
+            normalizedAttrs[attr] = Math.max(1, Math.min(30, Math.round(value)));
+          }
+        }
+        sheet_json.attributes = normalizedAttrs;
+      }
+      
+      // Validate skills (keep as-is, just ensure it's an object)
+      if (sheet_json.skills && typeof sheet_json.skills === 'object' && !Array.isArray(sheet_json.skills)) {
+        // Skills are valid as-is
+      } else if (sheet_json.skills) {
+        // Invalid format, remove it
+        delete sheet_json.skills;
+      }
+      
+      // Calculate proficiency bonus if not set (SRD-compatible formula: 2 + (level - 1) / 4, rounded up)
+      if (typeof sheet_json.proficiencyBonus !== 'number') {
+        sheet_json.proficiencyBonus = Math.ceil(2 + (level - 1) / 4);
+      }
+    }
 
     await sql`
       INSERT INTO room_characters (id, room_id, bot_id, name, class, level, max_hp, current_hp, portrait_url, sheet_json, is_dead, died_at, updated_at)
