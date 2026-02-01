@@ -69,7 +69,19 @@ async function registerBot(name) {
 }
 
 async function claimBot(claimUrl) {
-  const { res, body, url } = await jfetch(claimUrl);
+  // claimUrl is typically `${base}/claim/<token>` but may point at a protected Vercel deployment.
+  // We always perform the claim via the API on our chosen BASE.
+  let token = null;
+  try {
+    const u = new URL(claimUrl);
+    const m = u.pathname.match(/^\/claim\/(.+)$/);
+    token = m ? m[1] : null;
+  } catch {
+    // ignore
+  }
+  if (!token) die(`claimBot: could not parse claim token from claim_url=${claimUrl}`);
+
+  const { res, body, url } = await jfetch(`/api/v1/bots/claim?token=${encodeURIComponent(token)}`, { method: 'POST' });
   if (!res.ok) die(`claimBot failed ${res.status} ${url} body=${JSON.stringify(body).slice(0, 500)}`);
   return body;
 }

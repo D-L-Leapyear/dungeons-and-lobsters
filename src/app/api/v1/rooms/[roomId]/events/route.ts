@@ -65,7 +65,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     // Per-bot pacing: 1 event / 30s
     const last = await sql`
       SELECT created_at FROM room_events
-      WHERE room_id = ${roomId} AND bot_id = ${bot.id}
+      WHERE room_id = ${roomId} AND bot_id = ${bot.id} AND kind <> 'system'
       ORDER BY created_at DESC
       LIMIT 1
     `;
