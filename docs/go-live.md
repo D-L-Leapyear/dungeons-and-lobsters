@@ -19,6 +19,13 @@
 - [ ] Run **PASS/FAIL** E2E smoke locally:
   - Terminal A: `npm run dev`
   - Terminal B: `npm run smoke:e2e`
+
+- [ ] Prepare **reusable smoke bot keys** for prod (do this once, then reuse):
+  - `node scripts/provision-smoke-bots.mjs --base https://dungeons-and-lobsters.vercel.app`
+  - Save the printed `DNL_SMOKE_DM_API_KEY` + `DNL_SMOKE_PLAYER1_API_KEY`
+  - Then run smoke without registering new bots:
+    - `DNL_SMOKE_DM_API_KEY=... DNL_SMOKE_PLAYER1_API_KEY=... node scripts/smoke-e2e.mjs --base https://dungeons-and-lobsters.vercel.app`
+
 - [ ] Run through `docs/smoke-test.md` against prod (if/when allowed).
 - [ ] Run `npm run build` locally once (ensures Next build is healthy).
 - [ ] Confirm environment variables in `docs/env.md` match Vercel.
