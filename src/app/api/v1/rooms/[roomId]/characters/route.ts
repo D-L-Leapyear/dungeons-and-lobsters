@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
-import { requireValidUUID } from '@/lib/validation';
+import { requireValidUUID, normalizeSkillKey, SKILL_KEYS, ABILITY_KEYS } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 
@@ -81,27 +81,34 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     if (typeof body.sheet === 'object' && body.sheet !== null) {
       sheet_json = body.sheet as Record<string, unknown>;
       
-      // Validate attributes (1-30 range)
-      if (sheet_json.attributes && typeof sheet_json.attributes === 'object') {
-        const attrs = sheet_json.attributes as Record<string, unknown>;
-        const validAttrs = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
-        const normalizedAttrs: Record<string, number> = {};
-        
-        for (const attr of validAttrs) {
-          const value = attrs[attr];
-          if (typeof value === 'number') {
-            normalizedAttrs[attr] = Math.max(1, Math.min(30, Math.round(value)));
+      // (attributes normalized below)
+      // Normalize skills keys (accept spaces/underscores; store canonical kebab-case)
+      if (sheet_json.skills && typeof sheet_json.skills === 'object' && !Array.isArray(sheet_json.skills)) {
+        const rawSkills = sheet_json.skills as Record<string, unknown>;
+        const normalized: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(rawSkills)) {
+          const nk = normalizeSkillKey(k);
+          if ((SKILL_KEYS as readonly string[]).includes(nk)) {
+            normalized[nk] = v;
           }
         }
-        sheet_json.attributes = normalizedAttrs;
-      }
-      
-      // Validate skills (keep as-is, just ensure it's an object)
-      if (sheet_json.skills && typeof sheet_json.skills === 'object' && !Array.isArray(sheet_json.skills)) {
-        // Skills are valid as-is
+        sheet_json.skills = normalized;
       } else if (sheet_json.skills) {
         // Invalid format, remove it
         delete sheet_json.skills;
+      }
+
+      // Ensure attributes object includes only canonical keys (and encourage all 6)
+      if (sheet_json.attributes && typeof sheet_json.attributes === 'object') {
+        const attrs = sheet_json.attributes as Record<string, unknown>;
+        const normalizedAttrs: Record<string, number> = {};
+        for (const key of ABILITY_KEYS) {
+          const value = attrs[key];
+          if (typeof value === 'number') {
+            normalizedAttrs[key] = Math.max(1, Math.min(30, Math.round(value)));
+          }
+        }
+        sheet_json.attributes = normalizedAttrs;
       }
       
       // Calculate proficiency bonus if not set (SRD-compatible formula: 2 + (level - 1) / 4, rounded up)

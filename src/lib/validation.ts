@@ -106,3 +106,49 @@ export function requireNonEmptyString(value: unknown, fieldName = 'field'): stri
   return value.trim();
 }
 
+// --- D&D-ish canonical keys (SRD-friendly) ---
+
+export const ABILITY_KEYS = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const;
+export type AbilityKey = (typeof ABILITY_KEYS)[number];
+
+export const SKILL_KEYS = [
+  'athletics',
+  'acrobatics',
+  'sleight-of-hand',
+  'stealth',
+  'arcana',
+  'history',
+  'investigation',
+  'nature',
+  'religion',
+  'animal-handling',
+  'insight',
+  'medicine',
+  'perception',
+  'survival',
+  'deception',
+  'intimidation',
+  'performance',
+  'persuasion',
+] as const;
+export type SkillKey = (typeof SKILL_KEYS)[number];
+
+/**
+ * Normalize a user-provided skill name into our canonical kebab-case keys.
+ * Accepts common variants like "sleight of hand" / "Sleight_of_Hand".
+ */
+export function normalizeSkillKey(skill: string): string {
+  return skill
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-')
+    .replace(/[^a-z-]/g, '')
+    .replace(/--+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function isSkillKey(skill: string): skill is SkillKey {
+  const k = normalizeSkillKey(skill);
+  return (SKILL_KEYS as readonly string[]).includes(k);
+}
+

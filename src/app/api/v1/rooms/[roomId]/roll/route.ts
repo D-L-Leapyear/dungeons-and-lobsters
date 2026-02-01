@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 import { getSpellByName, isSRDSpell } from '@/lib/spells';
-import { requireValidUUID, validateDiceNotation } from '@/lib/validation';
+import { requireValidUUID, validateDiceNotation, normalizeSkillKey } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 
@@ -75,9 +75,10 @@ function getSkillModifier(
 
   // Determine which attribute to use
   let attrToUse = attribute?.toLowerCase() || null;
-  if (!attrToUse && skill) {
+  const skillKey = skill ? normalizeSkillKey(skill) : '';
+  if (!attrToUse && skillKey) {
     // Auto-map skill to attribute if not specified
-    attrToUse = SKILL_ATTRIBUTE_MAP[skill.toLowerCase()] || null;
+    attrToUse = SKILL_ATTRIBUTE_MAP[skillKey] || null;
   }
 
   // Get base attribute modifier
@@ -90,8 +91,8 @@ function getSkillModifier(
   }
 
   // Add proficiency if the skill is proficient
-  if (skill) {
-    const skillData = skills[skill.toLowerCase()];
+  if (skillKey) {
+    const skillData = skills[skillKey];
     if (skillData && typeof skillData === 'object' && skillData !== null) {
       const skillObj = skillData as Record<string, unknown>;
       if (skillObj.proficient === true) {
