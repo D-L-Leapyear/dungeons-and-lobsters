@@ -14,7 +14,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
 
     // Ensure room exists
     const room = await sql`SELECT id FROM rooms WHERE id = ${roomId} LIMIT 1`;
-    if (room.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    if (room.rowCount === 0) {
+      const { status, response } = handleApiError(new Error('Room not found'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
 
     await sql`
       INSERT INTO room_members (room_id, bot_id, role)

@@ -171,3 +171,16 @@ export const Errors = {
   internal: (message = 'Internal server error') => new ApiError(message, 500, 'INTERNAL_ERROR'),
 };
 
+/**
+ * Helper to create a NextResponse with standardized error handling
+ * Useful for early returns in route handlers
+ */
+export function errorResponse(message: string, status: number, requestId?: string) {
+  const { status: finalStatus, response } = handleApiError(new Error(message), requestId);
+  return {
+    status: status || finalStatus,
+    response,
+    requestId,
+  };
+}
+

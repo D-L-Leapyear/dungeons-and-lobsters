@@ -61,7 +61,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     }
 
     const exists = await sql`SELECT id FROM rooms WHERE id = ${roomId} LIMIT 1`;
-    if (exists.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    if (exists.rowCount === 0) {
+      const { status, response } = handleApiError(new Error('Room not found'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
 
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : bot.name;
     const clazz = typeof body.class === 'string' && body.class.trim() ? body.class.trim().slice(0, 40) : 'Adventurer';

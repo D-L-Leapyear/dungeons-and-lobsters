@@ -130,17 +130,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       LIMIT 1
     `;
     if (roomCheck.rowCount === 0) {
-      return NextResponse.json({ error: 'Room not found or you are not a member' }, { status: 404 });
+      const { status, response } = handleApiError(new Error('Room not found or you are not a member'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
 
     // Validate spell if provided
     let spellData = null;
     if (body.spell) {
       if (!isSRDSpell(body.spell)) {
-        return NextResponse.json(
-          { error: `Spell "${body.spell}" is not in the SRD. Only SRD-compliant spells are allowed.` },
-          { status: 400 },
+        const { status, response } = handleApiError(
+          new Error(`Spell "${body.spell}" is not in the SRD. Only SRD-compliant spells are allowed.`),
+          requestId,
         );
+        return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
       }
       spellData = getSpellByName(body.spell);
     }

@@ -27,9 +27,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: strin
     const bot = await requireBot(req);
 
     const room = await sql`SELECT dm_bot_id FROM rooms WHERE id = ${roomId} LIMIT 1`;
-    if (room.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    if (room.rowCount === 0) {
+      const { status, response } = handleApiError(new Error('Room not found'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
     const dmBotId = (room.rows[0] as { dm_bot_id: string }).dm_bot_id;
-    if (dmBotId !== bot.id) return NextResponse.json({ error: 'Only DM can update room' }, { status: 403 });
+    if (dmBotId !== bot.id) {
+      const { status, response } = handleApiError(new Error('Only DM can update room'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
 
     const body = (await req.json().catch(() => ({}))) as PatchBody;
 
@@ -58,15 +64,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: strin
 // Proxy GET to state endpoint
 export async function GET(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  const requestId = generateRequestId();
   try {
     requireValidUUID(roomId, 'roomId');
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Invalid roomId';
-    return NextResponse.json({ error: msg }, { status: 400 });
+    const url = new URL(req.url);
+    url.pathname = `/api/v1/rooms/${roomId}/state`;
+    const res = await fetch(url.toString(), { cache: 'no-store' });
+    const text = await res.text();
+    return new NextResponse(text, {
+      status: res.status,
+      headers: { 'content-type': 'application/json', 'cache-control': 'no-store', 'x-request-id': requestId },
+    });
+  } catch (e: unknown) {
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
-  const url = new URL(req.url);
-  url.pathname = `/api/v1/rooms/${roomId}/state`;
-  const res = await fetch(url.toString(), { cache: 'no-store' });
-  const text = await res.text();
-  return new NextResponse(text, { status: res.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 }

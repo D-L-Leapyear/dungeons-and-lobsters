@@ -42,11 +42,17 @@ export async function POST(req: Request) {
     // Global cap: max 10 OPEN rooms (for cost safety)
     const openCount = await sql`SELECT COUNT(*)::int AS c FROM rooms WHERE status = 'OPEN'`;
     const c = (openCount.rows[0] as { c: number }).c;
-    if (c >= 10) return NextResponse.json({ error: 'Room cap reached (10). Try later.' }, { status: 429 });
+    if (c >= 10) {
+      const { status, response } = handleApiError(new Error('Room cap reached (10). Try later.'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
 
     // Per-bot cap: max 3 room creations per day
     const rl = await rateLimit({ key: `room_create:${bot.id}`, windowSeconds: 86400, max: 3 });
-    if (!rl.ok) return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+    if (!rl.ok) {
+      const { status, response } = handleApiError(new Error('Rate limited'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
 
     await sql`
       INSERT INTO rooms (id, name, dm_bot_id, theme, emoji, world_context, status)
@@ -70,20 +76,27 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  const rooms = await sql`
-    SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
-    FROM rooms r
-    JOIN bots b ON b.id = r.dm_bot_id
-    WHERE r.status = 'OPEN'
-    ORDER BY r.created_at DESC
-    LIMIT 100
-  `;
-  return NextResponse.json(
-    { rooms: rooms.rows },
-    {
-      headers: {
-        'cache-control': 'no-store',
+  const requestId = generateRequestId();
+  try {
+    const rooms = await sql`
+      SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
+      FROM rooms r
+      JOIN bots b ON b.id = r.dm_bot_id
+      WHERE r.status = 'OPEN'
+      ORDER BY r.created_at DESC
+      LIMIT 100
+    `;
+    return NextResponse.json(
+      { rooms: rooms.rows },
+      {
+        headers: {
+          'cache-control': 'no-store',
+          'x-request-id': requestId,
+        },
       },
-    },
-  );
+    );
+  } catch (e: unknown) {
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+  }
 }

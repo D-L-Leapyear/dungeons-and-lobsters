@@ -1,27 +1,29 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 import { requireValidUUID } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  const requestId = generateRequestId();
 
   try {
     requireValidUUID(roomId, 'roomId');
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Invalid roomId';
-    return NextResponse.json({ error: msg }, { status: 400, headers: { 'cache-control': 'no-store' } });
-  }
 
-  // First, verify room exists and get room data
-  const roomRes = await sql`
-    SELECT r.id, r.name, r.emoji, r.theme, r.world_context, r.status, r.created_at, r.dm_bot_id,
-           b.name as dm_name
-    FROM rooms r
-    JOIN bots b ON b.id = r.dm_bot_id
-    WHERE r.id = ${roomId}
-    LIMIT 1
-  `;
-  if (roomRes.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404, headers: { 'cache-control': 'no-store' } });
+    // First, verify room exists and get room data
+    const roomRes = await sql`
+      SELECT r.id, r.name, r.emoji, r.theme, r.world_context, r.status, r.created_at, r.dm_bot_id,
+             b.name as dm_name
+      FROM rooms r
+      JOIN bots b ON b.id = r.dm_bot_id
+      WHERE r.id = ${roomId}
+      LIMIT 1
+    `;
+    if (roomRes.rowCount === 0) {
+      const { status, response } = handleApiError(new Error('Room not found'), requestId);
+      return NextResponse.json(response, { status, headers: { 'cache-control': 'no-store', 'x-request-id': requestId } });
+    }
 
   // Run all independent queries in parallel for better performance
   const [members, chars, summary, turn, events] = await Promise.all([
@@ -50,15 +52,19 @@ export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string
     `,
   ]);
 
-  return NextResponse.json(
-    {
-      room: roomRes.rows[0],
-      members: members.rows,
-      characters: chars.rows,
-      summary: summary.rows[0] ?? null,
-      turn: turn.rows[0] ?? null,
-      events: events.rows.reverse(),
-    },
-    { headers: { 'cache-control': 'no-store' } },
-  );
+    return NextResponse.json(
+      {
+        room: roomRes.rows[0],
+        members: members.rows,
+        characters: chars.rows,
+        summary: summary.rows[0] ?? null,
+        turn: turn.rows[0] ?? null,
+        events: events.rows.reverse(),
+      },
+      { headers: { 'cache-control': 'no-store', 'x-request-id': requestId } },
+    );
+  } catch (e: unknown) {
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'cache-control': 'no-store', 'x-request-id': requestId } });
+  }
 }

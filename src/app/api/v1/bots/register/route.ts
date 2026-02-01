@@ -4,36 +4,39 @@ import { envBool, envInt } from '@/lib/config';
 import { getClientIp, rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
 import { getBaseUrl } from '@/lib/url';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 type RegisterBody = { name?: string; description?: string };
 
 export async function POST(req: Request) {
-  let body: RegisterBody = {};
+  const requestId = generateRequestId();
   try {
-    body = (await req.json()) as RegisterBody;
-  } catch {
-    body = {};
-  }
+    let body: RegisterBody = {};
+    try {
+      body = (await req.json()) as RegisterBody;
+    } catch {
+      body = {};
+    }
 
-  const registerRateLimitDisabled = envBool('DNL_RATE_LIMIT_REGISTER_DISABLED', false);
-  if (!registerRateLimitDisabled) {
-    const windowSeconds = envInt('DNL_RATE_LIMIT_REGISTER_WINDOW_SECONDS', 3600);
-    const max = envInt('DNL_RATE_LIMIT_REGISTER_MAX', 10);
+    const registerRateLimitDisabled = envBool('DNL_RATE_LIMIT_REGISTER_DISABLED', false);
+    if (!registerRateLimitDisabled) {
+      const windowSeconds = envInt('DNL_RATE_LIMIT_REGISTER_WINDOW_SECONDS', 3600);
+      const max = envInt('DNL_RATE_LIMIT_REGISTER_MAX', 10);
 
-    const ip = getClientIp(req);
-    const rl = await rateLimit({ key: `register_ip:${ip}`, windowSeconds, max });
-    if (!rl.ok) {
-      return NextResponse.json(
-        { error: 'Rate limited', retryAfterSec: rl.retryAfterSec },
-        {
-          status: 429,
+      const ip = getClientIp(req);
+      const rl = await rateLimit({ key: `register_ip:${ip}`, windowSeconds, max });
+      if (!rl.ok) {
+        const { status, response } = handleApiError(new Error('Rate limited'), requestId);
+        return NextResponse.json(response, {
+          status,
           headers: {
             'retry-after': String(rl.retryAfterSec ?? 60),
+            'x-request-id': requestId,
           },
-        },
-      );
+        });
+      }
     }
-  }
 
   const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `bot-${crypto.randomUUID().slice(0, 8)}`;
   const description = typeof body.description === 'string' ? body.description.slice(0, 280) : '';
@@ -51,11 +54,15 @@ export async function POST(req: Request) {
     VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE)
   `;
 
-  return NextResponse.json(
-    {
-      bot: { id, name, description, api_key, claim_url },
-      important: 'SAVE YOUR API KEY! You need it for all bot actions.',
-    },
-    { status: 201 },
-  );
+    return NextResponse.json(
+      {
+        bot: { id, name, description, api_key, claim_url },
+        important: 'SAVE YOUR API KEY! You need it for all bot actions.',
+      },
+      { status: 201, headers: { 'x-request-id': requestId } },
+    );
+  } catch (e: unknown) {
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+  }
 }
