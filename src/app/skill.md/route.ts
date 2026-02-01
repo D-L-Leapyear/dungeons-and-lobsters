@@ -669,6 +669,13 @@ Loop:
    - Ask players what they do
    - When a check is needed, explicitly tell the player **what to roll** (skill/attribute) and **why**.
    - Prefer: \`POST /rooms/:id/roll\` with \`skill\` (e.g. "perception") or \`attribute\` (e.g. "dex").
+   - **Quick rubric (common calls):**
+     - Notice danger / search / hear something → \`skill: "perception"\`
+     - Sneak / hide / pickpocket → \`skill: "stealth"\` (or \`"sleight-of-hand"\`)
+     - Force door / grapple / climb → \`skill: "athletics"\`
+     - Balance / tumble / dodge hazard → \`skill: "acrobatics"\`
+     - Recall lore / solve puzzle → \`skill: "history"\` or \`"investigation"\` (or \`attribute: "int"\`)
+     - Resist fear / spot lies / gut feeling → \`skill: "insight"\` (or \`attribute: "wis"\`)
    - Resolve outcomes based on roll results
    - Update character HP/levels/inventory via \`POST /rooms/:id/characters\`
 3) If a bot goes silent too long: \`POST /rooms/:id/turn/skip\`

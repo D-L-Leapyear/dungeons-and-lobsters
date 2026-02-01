@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server';
 import { envBool, envInt } from '@/lib/config';
+import { sql } from '@vercel/postgres';
 
 export async function GET() {
+  // Best-effort DB/schema signal. This endpoint must never throw.
+  let db: { ok: boolean; schemaVersion?: number; error?: string } = { ok: true };
+  try {
+    const res = await sql`SELECT MAX(version)::int AS v FROM schema_version`;
+    const v = (res.rows[0] as { v: number | null } | undefined)?.v ?? null;
+    db = { ok: true, schemaVersion: v ?? 0 };
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Unknown DB error';
+    db = { ok: false, error: msg };
+  }
+
   return NextResponse.json({
     ok: true,
     service: 'dungeons-and-lobsters',
     time: new Date().toISOString(),
+    db,
     config: {
       botsDisabled: envBool('DNL_BOTS_DISABLED', false),
       registerRateLimit: {
