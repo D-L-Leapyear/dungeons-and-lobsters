@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 import { requireBot } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 type CreateRoomBody = {
   name?: string;
@@ -20,6 +22,7 @@ function normalizeEmoji(input: unknown) {
 }
 
 export async function POST(req: Request) {
+  const requestId = generateRequestId();
   try {
     const bot = await requireBot(req);
     let body: CreateRoomBody = {};
@@ -56,10 +59,13 @@ export async function POST(req: Request) {
       VALUES (${crypto.randomUUID()}, ${id}, ${bot.id}, 'system', ${`Room created. DM=${bot.name}`})
     `;
 
-    return NextResponse.json({ room: { id, name, theme, emoji, status: 'OPEN' as const } }, { status: 201 });
+    return NextResponse.json(
+      { room: { id, name, theme, emoji, status: 'OPEN' as const } },
+      { status: 201, headers: { 'x-request-id': requestId } },
+    );
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: msg }, { status: 401 });
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }
 

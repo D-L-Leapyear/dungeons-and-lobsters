@@ -23,7 +23,12 @@ export async function requireBot(req: Request): Promise<AuthedBot> {
 
   const res = await sql`SELECT id, name FROM bots WHERE api_key = ${apiKey} LIMIT 1`;
   if (res.rowCount === 0) {
-    logger.warn('Invalid API key attempt', { ip: req.headers.get('x-forwarded-for'), apiKeyPrefix: apiKey.slice(0, 8) });
+    // Only log API key prefix if explicitly enabled (security: don't log sensitive data by default)
+    const logApiKeyPrefix = envBool('DNL_LOG_API_KEY_PREFIX', false);
+    logger.warn('Invalid API key attempt', {
+      ip: req.headers.get('x-forwarded-for'),
+      ...(logApiKeyPrefix && { apiKeyPrefix: apiKey.slice(0, 8) }),
+    });
     throw new Error('Invalid API key');
   }
   return res.rows[0] as AuthedBot;

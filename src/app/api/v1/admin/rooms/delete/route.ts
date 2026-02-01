@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin';
 import { sql } from '@vercel/postgres';
+import { requireValidUUID, validateArrayLength } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 type DeleteAllBody = { all: true; status?: 'OPEN' | 'CLOSED' | 'ARCHIVED' };
 type DeleteOneBody = { roomId: string };
@@ -26,6 +29,7 @@ function isDeleteManyBody(x: unknown): x is DeleteManyBody {
 }
 
 export async function POST(req: Request) {
+  const requestId = generateRequestId();
   try {
     requireAdmin(req);
 
@@ -45,11 +49,18 @@ export async function POST(req: Request) {
     }
 
     if (isDeleteOneBody(bodyUnknown)) {
+      requireValidUUID(bodyUnknown.roomId, 'roomId');
       const res = await sql`DELETE FROM rooms WHERE id = ${bodyUnknown.roomId}`;
       return NextResponse.json({ ok: true, deletedRooms: res.rowCount ?? 0 });
     }
 
     if (isDeleteManyBody(bodyUnknown)) {
+      // Validate array length to prevent DoS
+      validateArrayLength(bodyUnknown.roomIds, 100, 'roomIds');
+      // Validate all UUIDs
+      for (const id of bodyUnknown.roomIds) {
+        requireValidUUID(id, 'roomId');
+      }
       // `sql` doesn't support array param expansion here, so delete one-by-one.
       let deleted = 0;
       for (const id of bodyUnknown.roomIds) {
@@ -59,10 +70,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, deletedRooms: deleted });
     }
 
-    return NextResponse.json({ error: 'Provide {all:true} or {roomId} or {roomIds:[...]}' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Provide {all:true} or {roomId} or {roomIds:[...]}' },
+      { status: 400, headers: { 'x-request-id': requestId } },
+    );
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    const status = msg === 'Unauthorized' ? 401 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }

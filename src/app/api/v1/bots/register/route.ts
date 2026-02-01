@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { envBool, envInt } from '@/lib/config';
 import { getClientIp, rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
+import { getBaseUrl } from '@/lib/url';
 
 type RegisterBody = { name?: string; description?: string };
 
@@ -41,9 +42,8 @@ export async function POST(req: Request) {
   const api_key = `dal_${crypto.randomUUID().replace(/-/g, '')}`;
   const claim_token = `claim_${crypto.randomUUID().replace(/-/g, '')}`;
   
-  // Get base URL dynamically
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://dungeons-and-lobsters.vercel.app');
+  // Get base URL using centralized utility
+  const baseUrl = getBaseUrl();
   const claim_url = `${baseUrl}/claim/${claim_token}`;
 
   await sql`

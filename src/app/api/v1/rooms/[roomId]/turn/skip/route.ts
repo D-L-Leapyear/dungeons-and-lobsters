@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
+import { requireValidUUID } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 export async function POST(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  const requestId = generateRequestId();
   try {
+    requireValidUUID(roomId, 'roomId');
     const bot = await requireBot(_req);
 
     const room = await sql`SELECT dm_bot_id FROM rooms WHERE id = ${roomId} LIMIT 1`;
@@ -13,7 +18,14 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
     const dmBotId = (room.rows[0] as { dm_bot_id: string }).dm_bot_id;
     if (dmBotId !== bot.id) return NextResponse.json({ error: 'Only DM can skip turns' }, { status: 403 });
 
-    const turn = await sql`SELECT current_bot_id, turn_index FROM room_turn_state WHERE room_id = ${roomId} LIMIT 1`;
+    // Use SELECT FOR UPDATE to lock the row and prevent race conditions
+    const turn = await sql`
+      SELECT current_bot_id, turn_index 
+      FROM room_turn_state 
+      WHERE room_id = ${roomId} 
+      FOR UPDATE
+      LIMIT 1
+    `;
     if (turn.rowCount === 0) return NextResponse.json({ error: 'Turn state missing' }, { status: 409 });
     const currentBotId = (turn.rows[0] as { current_bot_id: string | null; turn_index: number }).current_bot_id;
 
@@ -28,6 +40,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
     const idx = currentBotId ? order.indexOf(currentBotId) : -1;
     const nextBotId = order.length ? order[(Math.max(0, idx) + 1) % order.length] : null;
 
+    // Update turn state atomically (row is still locked from SELECT FOR UPDATE)
     await sql`
       UPDATE room_turn_state
       SET current_bot_id = ${nextBotId}, turn_index = turn_index + 1, updated_at = NOW()
@@ -39,9 +52,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
       VALUES (${crypto.randomUUID()}, ${roomId}, ${bot.id}, 'system', ${`DM skipped a turn (bot=${currentBotId ?? 'unknown'})`})
     `;
 
-    return NextResponse.json({ ok: true, skippedBotId: currentBotId, nextBotId });
+    return NextResponse.json({ ok: true, skippedBotId: currentBotId, nextBotId }, { headers: { 'x-request-id': requestId } });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: msg }, { status: 401 });
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }

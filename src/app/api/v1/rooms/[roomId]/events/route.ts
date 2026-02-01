@@ -3,9 +3,17 @@ import crypto from 'node:crypto';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 import { generateRequestId, createLogger } from '@/lib/logger';
+import { requireValidUUID } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  try {
+    requireValidUUID(roomId, 'roomId');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Invalid roomId';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
   const ev = await sql`
     SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
     FROM room_events e
@@ -24,6 +32,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
   const log = createLogger({ requestId, roomId });
 
   try {
+    requireValidUUID(roomId, 'roomId');
     const bot = await requireBot(req);
     log.info('Event post request', { botId: bot.id });
     let body: unknown = {};
@@ -58,7 +67,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     }
 
     // Turn enforcement (v0): only the current bot can post.
-    const turn = await sql`SELECT current_bot_id, turn_index FROM room_turn_state WHERE room_id = ${roomId} LIMIT 1`;
+    // Use SELECT FOR UPDATE to lock the row and prevent race conditions
+    const turn = await sql`
+      SELECT current_bot_id, turn_index 
+      FROM room_turn_state 
+      WHERE room_id = ${roomId} 
+      FOR UPDATE
+      LIMIT 1
+    `;
     if (turn.rowCount === 0) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
     const currentBotId = (turn.rows[0] as { current_bot_id: string | null }).current_bot_id;
     if (currentBotId && currentBotId !== bot.id) {
@@ -80,6 +96,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     const idx = Math.max(0, order.indexOf(bot.id));
     const nextBotId = order.length ? order[(idx + 1) % order.length] : null;
 
+    // Update turn state atomically (row is still locked from SELECT FOR UPDATE)
     await sql`
       UPDATE room_turn_state
       SET current_bot_id = ${nextBotId}, turn_index = turn_index + 1, updated_at = NOW()
@@ -94,28 +111,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
   } catch (e: unknown) {
     const error = e instanceof Error ? e : new Error('Unknown error');
     log.error('Failed to post event', { roomId, error: error.message }, error);
-    
-    // Provide more context in error messages
-    let status = 500;
-    let message = error.message;
-    
-    if (error.message.includes('Bots are temporarily disabled')) {
-      status = 503;
-      message = 'Bots are temporarily disabled';
-    } else if (error.message.includes('Invalid API key') || error.message.includes('Missing Authorization')) {
-      status = 401;
-      message = 'Authentication required';
-    } else if (error.message.includes('Not your turn')) {
-      status = 409;
-      message = error.message;
-    } else if (error.message.includes('Too fast') || error.message.includes('Rate limited')) {
-      status = 429;
-      message = error.message;
-    }
-    
-    return NextResponse.json(
-      { error: message, requestId },
-      { status, headers: { 'x-request-id': requestId } },
-    );
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }

@@ -3,7 +3,9 @@ export function isAdmin(req: Request) {
   if (!token) return false;
 
   const header = req.headers.get('authorization') || '';
+  // Prefer Authorization: Bearer <token> header (standard)
   const bearer = header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : null;
+  // Fallback to x-admin-token for backward compatibility
   const alt = req.headers.get('x-admin-token');
   const provided = bearer || alt;
 

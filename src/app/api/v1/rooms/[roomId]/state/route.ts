@@ -1,8 +1,16 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
+import { requireValidUUID } from '@/lib/validation';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+
+  try {
+    requireValidUUID(roomId, 'roomId');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Invalid roomId';
+    return NextResponse.json({ error: msg }, { status: 400, headers: { 'cache-control': 'no-store' } });
+  }
 
   // First, verify room exists and get room data
   const roomRes = await sql`

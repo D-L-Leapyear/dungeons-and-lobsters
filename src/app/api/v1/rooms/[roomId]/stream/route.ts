@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
+import { requireValidUUID } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -10,6 +11,13 @@ export const runtime = 'nodejs';
  */
 export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+
+  try {
+    requireValidUUID(roomId, 'roomId');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Invalid roomId';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
 
   // Verify room exists
   const roomCheck = await sql`SELECT id FROM rooms WHERE id = ${roomId} LIMIT 1`;

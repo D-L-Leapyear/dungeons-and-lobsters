@@ -3,6 +3,9 @@ import crypto from 'node:crypto';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 import { getSpellByName, isSRDSpell } from '@/lib/spells';
+import { requireValidUUID, validateDiceNotation } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 type RollBody = {
   dice?: string; // e.g., "1d20", "2d6+3", "1d20+5"
@@ -108,7 +111,9 @@ function getSkillModifier(
 
 export async function POST(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  const requestId = generateRequestId();
   try {
+    requireValidUUID(roomId, 'roomId');
     const bot = await requireBot(req);
     let body: RollBody = {};
     try {
@@ -194,6 +199,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     // Parse dice notation or default to d20
     let diceSpec = { count: 1, sides: 20, modifier: 0 };
     if (body.dice) {
+      // Validate dice notation with DoS prevention
+      validateDiceNotation(body.dice);
       const parsed = parseDice(body.dice);
       if (parsed) {
         diceSpec = parsed;
@@ -222,24 +229,27 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       VALUES (${eventId}, ${roomId}, ${bot.id}, 'system', ${`🎲 ${bot.name} rolled ${rollText}`})
     `;
 
-    return NextResponse.json({
-      roll: {
-        dice: body.dice || '1d20',
-        rolls,
-        modifier: totalModifier,
-        total,
-        skill: body.skill || null,
-        attribute: attributeUsed || body.attribute || null,
-        attributeValue: attributeValue || null,
-        spell: body.spell || null,
-        spellLevel: body.spellLevel || null,
-        description: body.description || null,
+    return NextResponse.json(
+      {
+        roll: {
+          dice: body.dice || '1d20',
+          rolls,
+          modifier: totalModifier,
+          total,
+          skill: body.skill || null,
+          attribute: attributeUsed || body.attribute || null,
+          attributeValue: attributeValue || null,
+          spell: body.spell || null,
+          spellLevel: body.spellLevel || null,
+          description: body.description || null,
+        },
+        eventId,
       },
-      eventId,
-    });
+      { headers: { 'x-request-id': requestId } },
+    );
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: msg }, { status: 401 });
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }
 

@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
+import { requireValidUUID } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 type Body = {
   name?: string;
@@ -46,7 +49,9 @@ type Body = {
 
 export async function POST(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  const requestId = generateRequestId();
   try {
+    requireValidUUID(roomId, 'roomId');
     const bot = await requireBot(req);
     let body: Body = {};
     try {
@@ -146,9 +151,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
         updated_at = NOW()
     `;
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }, { headers: { 'x-request-id': requestId } });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: msg }, { status: 401 });
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
+import { requireValidUUID } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+import { generateRequestId } from '@/lib/logger';
 
 type PatchBody = {
   worldContext?: string;
@@ -18,7 +21,9 @@ function normalizeEmoji(input: unknown) {
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  const requestId = generateRequestId();
   try {
+    requireValidUUID(roomId, 'roomId');
     const bot = await requireBot(req);
 
     const room = await sql`SELECT dm_bot_id FROM rooms WHERE id = ${roomId} LIMIT 1`;
@@ -43,16 +48,22 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: strin
       WHERE id = ${roomId}
     `;
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }, { headers: { 'x-request-id': requestId } });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown error';
-    return NextResponse.json({ error: msg }, { status: 401 });
+    const { status, response } = handleApiError(e, requestId);
+    return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
 }
 
 // Proxy GET to state endpoint
 export async function GET(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
+  try {
+    requireValidUUID(roomId, 'roomId');
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Invalid roomId';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
   const url = new URL(req.url);
   url.pathname = `/api/v1/rooms/${roomId}/state`;
   const res = await fetch(url.toString(), { cache: 'no-store' });
