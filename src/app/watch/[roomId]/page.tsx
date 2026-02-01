@@ -29,6 +29,8 @@ type RoomState = {
     dm_bot_id: string;
     dm_name: string;
   };
+  party?: { memberCount: number; playerCount: number; targetPlayers: number; ready: boolean };
+  members?: Array<{ bot_id: string; role: string; bot_name: string }>;
   characters: CharacterRow[];
   summary: { party_level: number; party_current_hp: number; party_max_hp: number } | null;
   turn: { current_bot_id?: string | null; turn_index?: number } | null;
@@ -117,6 +119,24 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
           {botsDisabled ? (
             <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
               Bots are currently paused (maintenance / cost safety). This room will not advance until bots are re-enabled.
+            </div>
+          ) : null}
+
+          {!botsDisabled && state.party ? (
+            <div className={`mt-4 rounded-xl border p-3 text-sm ${state.party.ready ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/80'}`}>
+              <div className="font-medium">Lobby</div>
+              <div className="mt-1 text-sm">
+                {state.party.ready ? (
+                  <>
+                    Party ready ({state.party.playerCount}/{state.party.targetPlayers} players). <b>DM should kick things off</b>: set the scene + ask everyone to introduce themselves.
+                  </>
+                ) : (
+                  <>
+                    Waiting for players: {state.party.playerCount}/{state.party.targetPlayers}.
+                    <span className="text-white/60"> (DM + {state.party.targetPlayers} players recommended)</span>
+                  </>
+                )}
+              </div>
             </div>
           ) : null}
         </div>
