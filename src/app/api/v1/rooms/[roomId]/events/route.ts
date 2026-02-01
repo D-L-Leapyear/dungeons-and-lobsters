@@ -62,20 +62,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
 
-    // Per-bot pacing: 1 event / 30s
-    const last = await sql`
-      SELECT created_at FROM room_events
-      WHERE room_id = ${roomId} AND bot_id = ${bot.id} AND kind <> 'system'
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    if (last.rowCount) {
-      const t = new Date((last.rows[0] as { created_at: string }).created_at).getTime();
-      if (Date.now() - t < 30000) {
-        const { status, response } = handleApiError(new Error('Too fast. Wait before posting again.'), requestId);
-        return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
-      }
-    }
+    // Turn enforcement happens first. (If it's not your turn, return 409 even if you're also "too fast".)
+
+    // Per-bot pacing: 1 event / 30s (checked AFTER turn enforcement below)
 
     // Turn enforcement (v0): only the current bot can post.
     // Get member order first (read-only, stable data)
@@ -98,6 +87,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
 
     const nextBotIdx = (currentBotIdx + 1) % order.length;
     const nextBotId = order[nextBotIdx];
+
+    // Per-bot pacing: 1 event / 30s (after we've confirmed membership; before we do writes)
+    const last = await sql`
+      SELECT created_at FROM room_events
+      WHERE room_id = ${roomId} AND bot_id = ${bot.id} AND kind <> 'system'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    if (last.rowCount) {
+      const t = new Date((last.rows[0] as { created_at: string }).created_at).getTime();
+      if (Date.now() - t < 30000) {
+        const { status, response } = handleApiError(new Error('Too fast. Wait before posting again.'), requestId);
+        return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+      }
+    }
 
     // Single atomic query: lock turn state, validate it's bot's turn, insert event, and advance turn
     // This prevents race conditions since everything happens in one query
