@@ -126,6 +126,25 @@ async function postEvent(botKey, roomId, kind, content) {
   });
 }
 
+async function postEventWithRetry(botKey, roomId, kind, content, { retries = 2 } = {}) {
+  let attempt = 0;
+  while (true) {
+    const out = await postEvent(botKey, roomId, kind, content);
+    if (out.res.ok) return out;
+
+    // Handle pacing 429s (common right after room creation system event)
+    if (out.res.status === 429 && attempt < retries) {
+      const waitMs = 31000;
+      ok(`got 429 posting event; waiting ${Math.round(waitMs / 1000)}s then retrying...`);
+      await new Promise((r) => setTimeout(r, waitMs));
+      attempt++;
+      continue;
+    }
+
+    return out;
+  }
+}
+
 async function getState(roomId) {
   const { res, body, url } = await jfetch(`/api/v1/rooms/${roomId}/state`, { cache: 'no-store' });
   if (!res.ok) die(`getState failed ${res.status} ${url} body=${JSON.stringify(body).slice(0, 500)}`);
@@ -193,22 +212,37 @@ async function waitForSseRefresh(roomId) {
 async function main() {
   ok(`base=${BASE}`);
 
-  // 1) register DM + player
-  const dm = await registerBot('SmokeDM');
-  const p1 = await registerBot('SmokePlayer1');
-  ok('registered bots');
+  // 1) register DM + player (or reuse provided keys)
+  let dm;
+  let p1;
 
-  // 2) claim (exercise base URL claim path)
-  await claimBot(dm.claim_url);
-  ok('claimed DM bot');
+  const DM_API_KEY = process.env.DNL_SMOKE_DM_API_KEY || null;
+  const PLAYER1_API_KEY = process.env.DNL_SMOKE_PLAYER1_API_KEY || null;
 
-  // 3) create room
+  if (DM_API_KEY && PLAYER1_API_KEY) {
+    ok('using pre-provisioned API keys from env (no registration)');
+    dm = { name: 'SmokeDM', api_key: DM_API_KEY, claim_url: null };
+    p1 = { name: 'SmokePlayer1', api_key: PLAYER1_API_KEY, claim_url: null };
+  } else {
+    dm = await registerBot('SmokeDM');
+    p1 = await registerBot('SmokePlayer1');
+    ok('registered bots');
+
+    // claim (exercise claim path)
+    await claimBot(dm.claim_url);
+    ok('claimed DM bot');
+  }
+
+  // 2) create room
   const room = await createRoom(dm.api_key);
   ok(`created room=${room.id}`);
 
   // 4) join
   await joinRoom(p1.api_key, room.id);
   ok('player joined');
+
+  // If we had to reuse keys, make sure DM is actually the room DM.
+  // (If it's not, createRoom would have failed already.)
 
   // 5) upsert characters with full 6 abilities + a few skills
   await upsertCharacter(dm.api_key, room.id, {
@@ -245,7 +279,7 @@ async function main() {
   ok(`turn.current=${st?.turn?.current_bot_id || 'null'}`);
 
   // DM posts first (should be allowed if turn is null or DM)
-  const dmPost = await postEvent(dm.api_key, room.id, 'dm', 'Smoke intro: you stand before a dripping door.');
+  const dmPost = await postEventWithRetry(dm.api_key, room.id, 'dm', 'Smoke intro: you stand before a dripping door.');
   if (!dmPost.res.ok) die(`dm post failed ${dmPost.res.status} body=${JSON.stringify(dmPost.body).slice(0, 500)}`);
   ok('dm posted event');
 
@@ -259,7 +293,7 @@ async function main() {
   ok('turn enforcement: DM double-post returns 409');
 
   // 8) Player posts (should be allowed)
-  const p1Post = await postEvent(p1.api_key, room.id, 'action', 'I creep forward, listening at the door.');
+  const p1Post = await postEventWithRetry(p1.api_key, room.id, 'action', 'I creep forward, listening at the door.');
   if (!p1Post.res.ok) die(`player post failed ${p1Post.res.status} body=${JSON.stringify(p1Post.body).slice(0, 500)}`);
   ok('player posted event');
 
