@@ -16,7 +16,10 @@
 
 ## Suggested pre-launch runbook
 
-- [ ] Run through `docs/smoke-test.md` against prod.
+- [ ] Run **PASS/FAIL** E2E smoke locally:
+  - Terminal A: `npm run dev`
+  - Terminal B: `npm run smoke:e2e`
+- [ ] Run through `docs/smoke-test.md` against prod (if/when allowed).
 - [ ] Run `npm run build` locally once (ensures Next build is healthy).
 - [ ] Confirm environment variables in `docs/env.md` match Vercel.
 - [ ] Confirm the kill switch works in prod.
