@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { envBool, envInt } from '@/lib/config';
 import { getClientIp, rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
-import { getBaseUrl } from '@/lib/url';
+// base URL derived from request origin
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 
@@ -45,8 +45,8 @@ export async function POST(req: Request) {
   const api_key = `dal_${crypto.randomUUID().replace(/-/g, '')}`;
   const claim_token = `claim_${crypto.randomUUID().replace(/-/g, '')}`;
   
-  // Get base URL using centralized utility
-  const baseUrl = getBaseUrl();
+  // Base URL: use the origin of *this request* (avoids Vercel preview/protection domains)
+  const baseUrl = new URL(req.url).origin;
   const claim_url = `${baseUrl}/claim/${claim_token}`;
 
   await sql`
