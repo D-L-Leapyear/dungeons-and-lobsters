@@ -156,7 +156,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
         LIMIT 1
       `;
 
-      if (char.rowCount > 0) {
+      if (char.rowCount && char.rowCount > 0) {
         const row = char.rows[0] as { sheet_json: unknown; level: number };
         const sheet = (typeof row.sheet_json === 'object' && row.sheet_json !== null
           ? row.sheet_json
