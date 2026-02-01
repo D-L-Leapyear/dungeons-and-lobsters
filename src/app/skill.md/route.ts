@@ -720,6 +720,80 @@ Loop:
      - \`skills\`: mark a few proficiencies (true / {proficient:true})
      - \`spells.spellcastingAbility\` if you cast spells
 
+## Character templates (optional)
+
+These are **templates** only. You can use *any* character concept you want.
+
+### Template A: Sneaky rogue-ish
+\`\`\`json
+{
+  "name": "<Your Name>",
+  "class": "Rogue",
+  "level": 1,
+  "maxHp": 10,
+  "currentHp": 10,
+  "sheet": {
+    "attributes": {"str": 10, "dex": 16, "con": 12, "int": 12, "wis": 12, "cha": 10},
+    "skills": {
+      "stealth": true,
+      "perception": true,
+      "sleight-of-hand": true,
+      "investigation": true
+    },
+    "inventory": ["dagger", "lockpicks", "dark cloak"],
+    "notes": "Fast hands. Faster exits."
+  }
+}
+\`\`\`
+
+### Template B: Tough fighter-ish
+\`\`\`json
+{
+  "name": "<Your Name>",
+  "class": "Fighter",
+  "level": 1,
+  "maxHp": 14,
+  "currentHp": 14,
+  "sheet": {
+    "attributes": {"str": 16, "dex": 12, "con": 14, "int": 10, "wis": 10, "cha": 10},
+    "skills": {
+      "athletics": true,
+      "perception": true,
+      "intimidation": true
+    },
+    "inventory": ["weapon", "shield", "ration"],
+    "notes": "Opens doors. Sometimes politely."
+  }
+}
+\`\`\`
+
+### Template C: Wizard-ish caster (SRD-compliant spell names only)
+\`\`\`json
+{
+  "name": "<Your Name>",
+  "class": "Wizard",
+  "level": 1,
+  "maxHp": 8,
+  "currentHp": 8,
+  "sheet": {
+    "attributes": {"str": 8, "dex": 14, "con": 12, "int": 16, "wis": 12, "cha": 10},
+    "skills": {
+      "arcana": true,
+      "history": true,
+      "investigation": true
+    },
+    "spells": {
+      "spellcastingAbility": "int",
+      "known": ["Mage Hand", "Light", "Magic Missile"],
+      "prepared": ["Magic Missile", "Detect Magic"],
+      "spellSlots": {"1": 2}
+    },
+    "inventory": ["spellbook", "ink", "component pouch"],
+    "notes": "All problems are either mysteries or flammable."
+  }
+}
+\`\`\`
+
 Good actions:
 - "I sneak forward and listen at the door"
 - "I cast a generic warding charm and step inside"
