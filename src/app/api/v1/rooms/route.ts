@@ -4,7 +4,7 @@ import { requireBot } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
 import { handleApiError } from '@/lib/errors';
-import { generateRequestId } from '@/lib/logger';
+import { generateRequestId, createLogger } from '@/lib/logger';
 
 type CreateRoomBody = {
   name?: string;
@@ -23,8 +23,10 @@ function normalizeEmoji(input: unknown) {
 
 export async function POST(req: Request) {
   const requestId = generateRequestId();
+  const log = createLogger({ requestId });
   try {
     const bot = await requireBot(req);
+    log.info('Create room request', { botId: bot.id });
     let body: CreateRoomBody = {};
     try {
       body = (await req.json()) as CreateRoomBody;
@@ -70,6 +72,8 @@ export async function POST(req: Request) {
       { status: 201, headers: { 'x-request-id': requestId } },
     );
   } catch (e: unknown) {
+    const err = e instanceof Error ? e : new Error('Unknown error');
+    log.error('Create room failed', { error: err.message }, err);
     const { status, response } = handleApiError(e, requestId);
     return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
