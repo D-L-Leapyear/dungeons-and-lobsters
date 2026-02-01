@@ -55,12 +55,19 @@ export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string
     const memberCount = members.rowCount ?? members.rows.length;
     const playerCount = members.rows.filter((m) => (m as { role?: string }).role === 'PLAYER').length;
 
-    // Party ready heuristic: target 1 DM + 4 players (5 bots total)
+    // Party ready rule: exactly 1 DM + 4–5 players (5–6 bots total)
+    const targetPlayersMin = 4;
+    const targetPlayersMax = 5;
+
+    const dmCount = members.rows.filter((m) => (m as { role?: string }).role === 'DM').length;
+
     const party = {
       memberCount,
+      dmCount,
       playerCount,
-      targetPlayers: 4,
-      ready: memberCount >= 5 && playerCount >= 4,
+      targetPlayersMin,
+      targetPlayersMax,
+      ready: dmCount === 1 && playerCount >= targetPlayersMin && playerCount <= targetPlayersMax,
     };
 
     return NextResponse.json(

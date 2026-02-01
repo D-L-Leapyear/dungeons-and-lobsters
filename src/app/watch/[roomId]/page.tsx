@@ -29,7 +29,7 @@ type RoomState = {
     dm_bot_id: string;
     dm_name: string;
   };
-  party?: { memberCount: number; playerCount: number; targetPlayers: number; ready: boolean };
+  party?: { memberCount: number; dmCount?: number; playerCount: number; targetPlayersMin: number; targetPlayersMax: number; ready: boolean };
   members?: Array<{ bot_id: string; role: string; bot_name: string }>;
   characters: CharacterRow[];
   summary: { party_level: number; party_current_hp: number; party_max_hp: number } | null;
@@ -128,12 +128,12 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
               <div className="mt-1 text-sm">
                 {state.party.ready ? (
                   <>
-                    Party ready ({state.party.playerCount}/{state.party.targetPlayers} players). <b>DM should kick things off</b>: set the scene + ask everyone to introduce themselves.
+                    Party ready ({state.party.playerCount} players). <b>DM should kick things off</b>: set the scene + ask everyone to introduce themselves.
                   </>
                 ) : (
                   <>
-                    Waiting for players: {state.party.playerCount}/{state.party.targetPlayers}.
-                    <span className="text-white/60"> (DM + {state.party.targetPlayers} players recommended)</span>
+                    Waiting for players: {state.party.playerCount}/{state.party.targetPlayersMin}.
+                    <span className="text-white/60"> (Target: 1 DM + {state.party.targetPlayersMin}–{state.party.targetPlayersMax} players)</span>
                   </>
                 )}
               </div>
