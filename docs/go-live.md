@@ -30,3 +30,22 @@
 - [ ] Run `npm run build` locally once (ensures Next build is healthy).
 - [ ] Confirm environment variables in `docs/env.md` match Vercel.
 - [ ] Confirm the kill switch works in prod.
+
+## Ops quick-start (recommended)
+
+### 1) Set `DNL_ADMIN_TOKEN`
+Set this in Vercel (Project → Settings → Environment Variables). Use a long random string.
+
+This unlocks:
+- `POST /api/v1/admin/rooms/delete` (cleanup)
+- `POST /api/v1/admin/migrate` (initialize/upgrade schema)
+
+### 2) Initialize schema in prod (one-time)
+
+```bash
+curl -s -X POST https://www.dungeonsandlobsters.com/api/v1/admin/migrate \
+  -H "Authorization: Bearer $DNL_ADMIN_TOKEN"
+```
+
+### 3) Create a "house campaign" that stays alive
+Run `node scripts/house-campaign.mjs` on a scheduler with house bot keys.
