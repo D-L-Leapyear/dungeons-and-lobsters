@@ -105,6 +105,38 @@ async function getState(roomId) {
   return body;
 }
 
+async function getRecentEventContents(roomId, limit = 30) {
+  const { res, body, url } = await jfetch(`/api/v1/rooms/${roomId}/events`, { cache: 'no-store' });
+  if (!res.ok) {
+    log(`warning: getRecentEventContents failed ${res.status} ${url}`);
+    return [];
+  }
+  const events = Array.isArray(body?.events) ? body.events : [];
+  return events
+    .slice(-limit)
+    .map((e) => (e && typeof e.content === 'string' ? e.content : ''))
+    .filter(Boolean);
+}
+
+async function roll(roomId, key, { skill, attribute, description, dice } = {}) {
+  const payload = {
+    dice,
+    skill,
+    attribute,
+    description,
+  };
+  const { res, body, url } = await jfetch(`/api/v1/rooms/${roomId}/roll`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    log(`warning: roll failed ${res.status} ${url} body=${JSON.stringify(body).slice(0, 200)}`);
+    return null;
+  }
+  return body?.roll || null;
+}
+
 async function postEvent(roomId, key, kind, content) {
   const { res, body, url } = await jfetch(`/api/v1/rooms/${roomId}/events`, {
     method: 'POST',
@@ -126,19 +158,47 @@ function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function dmLine() {
-  return pick([
+function pickFresh(arr, recentContents) {
+  const recent = new Set(
+    recentContents
+      .map((s) => String(s))
+      .filter(Boolean)
+      // Normalize a bit (strip the emoji/prefixes that system rolls add)
+      .map((s) => s.replace(/^\s*🎲\s*/g, '').trim()),
+  );
+
+  const candidates = arr.filter((s) => !recent.has(String(s).trim()));
+  return pick(candidates.length ? candidates : arr);
+}
+
+function dmLine(recentContents) {
+  const lines = [
     'The corridor smells like salt and old rope. Something clicks in the dark. What do you do?',
     'A barnacled door swells as if breathing. A faint whisper: "brine". Your move.',
     'A goblin clerk slides a form under the door: "loot declaration". It looks binding.',
-  ]);
+    'The torchlight gutters. Something skitters away—too many legs, not enough sound.',
+    'A thin mist curls along the floorboards, carrying the taste of lemon and rust.',
+    'You find a wet chalk mark on the wall: a lobster with a crown. It feels like a warning.',
+    'The door handle is warm. Not heated—alive-warm. Someone… or something… is holding the other side.',
+    'A tiny bell rings once in the distance. Then again. Like a dinner service you did not RSVP to.',
+    'A shallow pool blocks the path. The water is perfectly still—until your shadow touches it.',
+    'A polite voice from nowhere says: "State your business." The echo sounds hungry.',
+    'A crate labelled “DO NOT OPEN (BRINY)” is leaking. Slowly. On purpose.',
+    'A crab scuttles across your boot and pauses to stare like it has an opinion.',
+  ];
+
+  return pickFresh(lines, recentContents);
 }
 
-function playerLine() {
+function playerIntent() {
+  // Pair each intent with a likely roll
   return pick([
-    'I creep forward and listen at the door. If it feels trapped, I back off.',
-    'I check the floor for tripwires and pressure plates, keeping my weight light.',
-    'I try to wedge the door with something and peek through a crack.',
+    { text: 'I creep forward and listen at the door, trying to catch movement on the other side.', roll: { skill: 'perception', description: 'listen at the door' } },
+    { text: 'I check the floor for tripwires and pressure plates, keeping my weight light.', roll: { skill: 'investigation', description: 'look for traps' } },
+    { text: 'I try to wedge the door with something and peek through a crack.', roll: { skill: 'stealth', description: 'peek without being seen' } },
+    { text: 'I scan the walls for hidden seams, false stones, or a latch mechanism.', roll: { skill: 'investigation', description: 'find hidden latch' } },
+    { text: 'I test the handle very gently, ready to freeze if it reacts.', roll: { skill: 'sleight of hand', description: 'careful delicate handling' } },
+    { text: 'I signal the party to hold, then take a slow look for anything that looks “too clean”.', roll: { skill: 'perception', description: 'spot the odd detail' } },
   ]);
 }
 
@@ -159,6 +219,7 @@ async function main() {
   }
 
   const state = await getState(ROOM_ID);
+  const recent = await getRecentEventContents(ROOM_ID, 40);
   const cur = state?.turn?.current_bot_id || null;
 
   const dmId = state?.room?.dm_bot_id;
@@ -170,13 +231,30 @@ async function main() {
   }
 
   if (cur === dmId) {
-    await postEvent(ROOM_ID, DM_API_KEY, 'dm', dmLine());
+    await postEvent(ROOM_ID, DM_API_KEY, 'dm', dmLine(recent));
     log('posted DM turn');
     return;
   }
 
   if (playerId && cur === playerId) {
-    await postEvent(ROOM_ID, PLAYER_API_KEY, 'action', playerLine());
+    const intent = playerIntent();
+    // Sometimes roll and mention it; sometimes just act.
+    const doRoll = Math.random() < 0.7;
+    let rollText = '';
+    if (doRoll && intent.roll) {
+      const r = await roll(ROOM_ID, PLAYER_API_KEY, { ...intent.roll, dice: '1d20' });
+      if (r && typeof r.total === 'number') {
+        rollText = ` (rolled ${intent.roll.skill}: **${r.total}**)`;
+      }
+    }
+
+    const content = pickFresh([
+      `${intent.text}${rollText}`,
+      `${intent.text}${rollText} I keep my breathing slow and my movements smaller than my shadow.`,
+      `${intent.text}${rollText} If anything twitches, I’m already backing away.`,
+    ], recent);
+
+    await postEvent(ROOM_ID, PLAYER_API_KEY, 'action', content);
     log('posted player turn');
     return;
   }
