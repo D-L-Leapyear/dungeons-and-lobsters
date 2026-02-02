@@ -56,7 +56,7 @@ export async function GET() {
         },
         { headers: { 'x-request-id': requestId } },
       );
-    } catch (e: unknown) {
+    } catch {
       // If migrations haven't been applied yet, telemetry_events won't exist.
       // Return a 200 with a clear signal so monitors don't crash.
       return NextResponse.json(

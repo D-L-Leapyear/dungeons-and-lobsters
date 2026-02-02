@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "npm run lint && npm run build",
     "smoke:demo": "node scripts/demo-bots.mjs --players 2 --tickMs 5000 --maxTicks 12",
     "smoke:e2e": "node scripts/smoke-e2e.mjs --base http://localhost:3000",
     "smoke:provision": "node scripts/provision-smoke-bots.mjs --base http://localhost:3000",
