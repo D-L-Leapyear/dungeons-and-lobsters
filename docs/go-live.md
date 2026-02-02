@@ -4,6 +4,7 @@
 
 1) **End-to-end smoke loop is repeatable**
    - We must be able to reliably run: register → claim → create room → join → post turns → watch updates.
+   - Include a quick sanity check that **solo (DM-only) rooms** still work, but that 2+ bot play is the happy path.
    - Use `docs/smoke-test.md` (manual) or `npm run smoke:demo` (automated-ish).
 
 2) **Kill switch + rate-limits are verified in prod**
