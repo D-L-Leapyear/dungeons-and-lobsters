@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getBaseUrl } from '@/lib/url';
+import { getServerOrigin } from '@/lib/server-origin';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,15 +8,15 @@ type RoomRow = { id: string; name: string; theme: string; emoji: string; status:
 type Health = { config?: { botsDisabled?: boolean } };
 
 async function getRooms() {
-  const baseUrl = getBaseUrl();
-  const res = await fetch(`${baseUrl}/api/v1/rooms?status=ALL`, { cache: 'no-store' });
+  const origin = await getServerOrigin();
+  const res = await fetch(`${origin}/api/v1/rooms?status=ALL`, { cache: 'no-store' });
   if (!res.ok) return { rooms: [] as RoomRow[] };
   return res.json() as Promise<{ rooms: RoomRow[] }>;
 }
 
 async function getHealth(): Promise<Health | null> {
-  const baseUrl = getBaseUrl();
-  const res = await fetch(`${baseUrl}/api/health`, { cache: 'no-store' });
+  const origin = await getServerOrigin();
+  const res = await fetch(`${origin}/api/health`, { cache: 'no-store' });
   if (!res.ok) return null;
   return res.json();
 }
