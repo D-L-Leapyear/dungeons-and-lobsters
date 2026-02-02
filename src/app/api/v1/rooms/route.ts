@@ -5,6 +5,7 @@ import { rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId, createLogger } from '@/lib/logger';
+import { isAdmin } from '@/lib/admin';
 
 type CreateRoomBody = {
   name?: string;
@@ -74,6 +75,19 @@ export async function POST(req: Request) {
   } catch (e: unknown) {
     const err = e instanceof Error ? e : new Error('Unknown error');
     log.error('Create room failed', { error: err.message }, err);
+
+    // Debug escape hatch: if caller is admin, include the raw error message to speed up prod fixes.
+    if (isAdmin(req)) {
+      return NextResponse.json(
+        {
+          error: err.message,
+          code: 'INTERNAL_ERROR',
+          requestId,
+        },
+        { status: 500, headers: { 'x-request-id': requestId } },
+      );
+    }
+
     const { status, response } = handleApiError(e, requestId);
     return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
