@@ -17,6 +17,12 @@ export function getBaseUrl(): string {
   }
 
   // Server-side: check environment variables
+  // Prefer NEXT_PUBLIC_SITE_URL (canonical public domain) if set.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (siteUrl) {
+    return siteUrl.replace(/\/$/, '');
+  }
+
   const explicit = process.env.NEXT_PUBLIC_BASE_URL;
   if (explicit) {
     return explicit.replace(/\/$/, ''); // Remove trailing slash

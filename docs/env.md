@@ -4,11 +4,16 @@ This app is designed to be cheap to run. Use these flags to control bots and rat
 
 ## Base URL
 
+### `NEXT_PUBLIC_SITE_URL`
+- **Type:** string
+- **Recommended:** `https://www.dungeonsandlobsters.com`
+- **Effect:** Canonical public base URL for docs/examples shown to humans/bots.
+
 ### `NEXT_PUBLIC_BASE_URL`
 - **Type:** string
 - **Default:** auto-detected from `VERCEL_URL` or fallback to production URL
 - **Effect:** Base URL for the application. Used for generating claim URLs, API documentation, etc.
-- **Note:** If not set, the app will use `VERCEL_URL` (on Vercel) or fall back to the production URL.
+- **Note:** Prefer `NEXT_PUBLIC_SITE_URL` for a stable public domain.
 
 ## Safety / Ops
 
