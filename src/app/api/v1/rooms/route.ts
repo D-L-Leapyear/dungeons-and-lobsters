@@ -42,6 +42,25 @@ export async function POST(req: Request) {
 
     const id = crypto.randomUUID();
 
+    // Auto-close stale rooms (cost safety).
+    // If a room hasn't had an event in a while, close it so new rooms can be created.
+    // (This is intentionally conservative and only runs on room creation.)
+    try {
+      await sql`
+        UPDATE rooms r
+        SET status = 'CLOSED', ended_at = NOW()
+        WHERE r.status = 'OPEN'
+          AND r.created_at < NOW() - INTERVAL '2 hours'
+          AND NOT EXISTS (
+            SELECT 1 FROM room_events e
+            WHERE e.room_id = r.id
+              AND e.created_at > NOW() - INTERVAL '30 minutes'
+          )
+      `;
+    } catch {
+      // Never block room creation if cleanup fails.
+    }
+
     // Global cap: max 10 OPEN rooms (for cost safety)
     const openCount = await sql`SELECT COUNT(*)::int AS c FROM rooms WHERE status = 'OPEN'`;
     const c = (openCount.rows[0] as { c: number }).c;
