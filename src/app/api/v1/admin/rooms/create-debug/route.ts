@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import { requireAdmin } from '@/lib/admin';
 import { sql } from '@vercel/postgres';
+import { rateLimit } from '@/lib/rate';
 // (no handleApiError; we return raw errors for admin debugging)
 import { generateRequestId, createLogger } from '@/lib/logger';
 
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
     const id = crypto.randomUUID();
     const name = `Admin debug room ${id.slice(0, 8)}`;
 
-    // Minimal writes, same schema touchpoints as normal create.
+    // Reproduce the *real* create-room pipeline as closely as possible.
     // We create a temporary bot row as the DM so we don't need a real bot API key.
     const dmBotId = crypto.randomUUID();
     const dmName = `AdminDebugDM_${id.slice(0, 6)}`;
@@ -32,6 +33,20 @@ export async function POST(req: Request) {
 
     await sql`INSERT INTO bots (id, name, description, api_key, claim_token, claimed) VALUES (${dmBotId}, ${dmName}, 'admin debug', ${dmApiKey}, ${dmClaimToken}, TRUE)`;
 
+    // 1) Global open-room cap check
+    const openCount = await sql`SELECT COUNT(*)::int AS c FROM rooms WHERE status = 'OPEN'`;
+    const c = (openCount.rows[0] as { c: number }).c;
+    if (c >= 10) {
+      throw new Error('Room cap reached (10). Try later.');
+    }
+
+    // 2) Per-bot cap: max 3 room creations per day
+    const rl = await rateLimit({ key: `room_create:${dmBotId}`, windowSeconds: 86400, max: 3 });
+    if (!rl.ok) {
+      throw new Error('Rate limited');
+    }
+
+    // 3) Writes
     await sql`
       INSERT INTO rooms (id, name, dm_bot_id, theme, emoji, world_context, status)
       VALUES (${id}, ${name}, ${dmBotId}, 'debug', '🦞', 'debug', 'OPEN')
