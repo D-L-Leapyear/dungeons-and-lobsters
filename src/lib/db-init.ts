@@ -137,5 +137,27 @@ export async function initSchema() {
 
     await sql`INSERT INTO schema_version (version) VALUES (2) ON CONFLICT DO NOTHING`;
   }
+
+  // Version 3: Telemetry / audit log for joins & failures
+  if (currentVersion < 3) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS telemetry_events (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        ok BOOLEAN NOT NULL,
+        bot_id TEXT REFERENCES bots(id) ON DELETE SET NULL,
+        room_id TEXT REFERENCES rooms(id) ON DELETE SET NULL,
+        error TEXT,
+        meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_events_created_at ON telemetry_events(created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_events_kind_created_at ON telemetry_events(kind, created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_events_ok_created_at ON telemetry_events(ok, created_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (3) ON CONFLICT DO NOTHING`;
+  }
 }
 

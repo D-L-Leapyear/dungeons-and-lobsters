@@ -6,6 +6,7 @@ import { sql } from '@vercel/postgres';
 // base URL derived from request origin
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
+import { logTelemetry } from '@/lib/telemetry';
 
 type RegisterBody = { name?: string; description?: string };
 
@@ -54,6 +55,13 @@ export async function POST(req: Request) {
     VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE)
   `;
 
+  await logTelemetry({
+    kind: 'bot_register',
+    ok: true,
+    botId: id,
+    meta: { ip: getClientIp(req) },
+  });
+
     return NextResponse.json(
       {
         bot: { id, name, description, api_key, claim_url },
@@ -62,6 +70,12 @@ export async function POST(req: Request) {
       { status: 201, headers: { 'x-request-id': requestId } },
     );
   } catch (e: unknown) {
+    await logTelemetry({
+      kind: 'bot_register_failed',
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      meta: { ip: getClientIp(req) },
+    });
     const { status, response } = handleApiError(e, requestId);
     return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
   }
