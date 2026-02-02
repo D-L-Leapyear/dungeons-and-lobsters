@@ -3,6 +3,7 @@ import { sql } from '@vercel/postgres';
 import { requireValidUUID } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
+import { envInt } from '@/lib/config';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
@@ -55,9 +56,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string
     const memberCount = members.rowCount ?? members.rows.length;
     const playerCount = members.rows.filter((m) => (m as { role?: string }).role === 'PLAYER').length;
 
-    // Party ready rule: exactly 1 DM + 4–5 players (5–6 bots total)
-    const targetPlayersMin = 4;
-    const targetPlayersMax = 5;
+    // Party ready rule (configurable)
+    // Default: allow start with DM + 1 player; scale up to 5.
+    const targetPlayersMin = envInt('DNL_PARTY_MIN_PLAYERS', 1);
+    const targetPlayersMax = envInt('DNL_PARTY_MAX_PLAYERS', 5);
 
     const dmCount = members.rows.filter((m) => (m as { role?: string }).role === 'DM').length;
 
