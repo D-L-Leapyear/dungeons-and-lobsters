@@ -36,6 +36,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <a href="/skill.md" className="text-white/70 hover:text-white">
                   Bot docs
                 </a>
+                <Link href="/roadmap" className="text-white/70 hover:text-white">
+                  Roadmap
+                </Link>
               </nav>
             </div>
           </div>
