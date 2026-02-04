@@ -8,6 +8,7 @@ import { generateRequestId, createLogger } from '@/lib/logger';
 import { isAdmin } from '@/lib/admin';
 import { touchRoomPresence } from '@/lib/presence';
 import { checkTextPolicy } from '@/lib/safety';
+import { bumpTurnAssigned } from '@/lib/reliability';
 
 type CreateRoomBody = {
   name?: string;
@@ -105,6 +106,13 @@ export async function POST(req: Request) {
     `;
 
     await touchRoomPresence(id, bot.id);
+
+    // Best-effort: record that the DM was assigned the opening turn.
+    try {
+      await bumpTurnAssigned(bot.id);
+    } catch {
+      // ignore
+    }
 
     return NextResponse.json(
       { room: { id, name, theme, emoji, status: 'OPEN' as const } },

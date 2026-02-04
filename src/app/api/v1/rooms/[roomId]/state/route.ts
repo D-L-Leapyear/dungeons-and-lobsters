@@ -7,6 +7,7 @@ import { envInt } from '@/lib/config';
 import { computePresence } from '@/lib/presence';
 import { getRoomTurnOrder } from '@/lib/turn-order';
 import { requireBot } from '@/lib/auth';
+import { computeReliabilityScore } from '@/lib/reliability';
 
 type BotContext = {
   botId: string;
@@ -57,13 +58,17 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
     // Run all independent queries in parallel for better performance
     const [members, chars, summary, turn, events, turnOrder, botDelta] = await Promise.all([
       sql`
-        SELECT m.bot_id, m.role, m.joined_at, b.name as bot_name, p.last_seen_at,
+        SELECT m.bot_id, m.role, m.joined_at, b.name as bot_name, b.owner_label as owner_label, p.last_seen_at,
                COALESCE(s.inactive, FALSE) as inactive,
-               COALESCE(s.timeout_streak, 0) as timeout_streak
+               COALESCE(s.timeout_streak, 0) as timeout_streak,
+               COALESCE(br.turns_assigned, 0) as turns_assigned,
+               COALESCE(br.turns_taken, 0) as turns_taken,
+               COALESCE(br.watchdog_timeouts, 0) as watchdog_timeouts
         FROM room_members m
         JOIN bots b ON b.id = m.bot_id
         LEFT JOIN room_member_presence p ON p.room_id = m.room_id AND p.bot_id = m.bot_id
         LEFT JOIN room_member_status s ON s.room_id = m.room_id AND s.bot_id = m.bot_id
+        LEFT JOIN bot_reliability br ON br.bot_id = m.bot_id
         WHERE m.room_id = ${roomId}
         ORDER BY (CASE WHEN m.role = 'DM' THEN 0 ELSE 1 END), m.joined_at ASC
       `,
@@ -130,18 +135,33 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
         role: string;
         joined_at: string;
         bot_name: string;
+        owner_label?: string | null;
         last_seen_at?: string | null;
         inactive?: boolean;
         timeout_streak?: number;
+        turns_assigned?: number;
+        turns_taken?: number;
+        watchdog_timeouts?: number;
       };
       const presence = computePresence(row.last_seen_at ?? null);
+      const turnsAssigned = typeof row.turns_assigned === 'number' ? row.turns_assigned : 0;
+      const turnsTaken = typeof row.turns_taken === 'number' ? row.turns_taken : 0;
+      const watchdogTimeouts = typeof row.watchdog_timeouts === 'number' ? row.watchdog_timeouts : 0;
+      const reliabilityScore = computeReliabilityScore({ turnsAssigned, turnsTaken, watchdogTimeouts });
       return {
         bot_id: row.bot_id,
         role: row.role,
         joined_at: row.joined_at,
         bot_name: row.bot_name,
+        owner_label: (row.owner_label ?? null) as string | null,
         inactive: !!row.inactive,
         timeout_streak: typeof row.timeout_streak === 'number' ? row.timeout_streak : 0,
+        reliability: {
+          turns_assigned: turnsAssigned,
+          turns_taken: turnsTaken,
+          watchdog_timeouts: watchdogTimeouts,
+          score: reliabilityScore,
+        },
         presence,
       };
     });

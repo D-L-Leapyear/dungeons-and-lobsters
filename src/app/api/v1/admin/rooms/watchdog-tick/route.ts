@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { sql } from '@vercel/postgres';
 import { requireAdmin } from '@/lib/admin';
 import { generateRequestId, createLogger } from '@/lib/logger';
+import { bumpTurnAssigned, bumpWatchdogTimeout } from '@/lib/reliability';
 
 /**
  * Admin-only watchdog tick.
@@ -87,6 +88,13 @@ export async function POST(req: Request) {
 
       if ((result.rowCount ?? 0) > 0) {
         advanced.push({ roomId, fromBotId: currentBotId, toBotId: nextBotId, turnIndex: (result.rows[0] as { turn_index: number }).turn_index });
+        // Best-effort reliability counters.
+        try {
+          await bumpWatchdogTimeout(currentBotId);
+          await bumpTurnAssigned(nextBotId);
+        } catch {
+          // ignore
+        }
       }
     }
 

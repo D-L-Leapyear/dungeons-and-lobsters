@@ -217,5 +217,29 @@ export async function initSchema() {
 
     await sql`INSERT INTO schema_version (version) VALUES (6) ON CONFLICT DO NOTHING`;
   }
+
+  // Version 7: Bot reliability / reputation counters (global, cross-room)
+  if (currentVersion < 7) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS bot_reliability (
+        bot_id TEXT PRIMARY KEY REFERENCES bots(id) ON DELETE CASCADE,
+        turns_assigned INT NOT NULL DEFAULT 0,
+        turns_taken INT NOT NULL DEFAULT 0,
+        watchdog_timeouts INT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_bot_reliability_updated_at ON bot_reliability(updated_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (7) ON CONFLICT DO NOTHING`;
+  }
+
+  // Version 8: Bot owner label (human-readable ownership hint)
+  if (currentVersion < 8) {
+    await sql`ALTER TABLE bots ADD COLUMN IF NOT EXISTS owner_label TEXT NOT NULL DEFAULT ''`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (8) ON CONFLICT DO NOTHING`;
+  }
 }
 

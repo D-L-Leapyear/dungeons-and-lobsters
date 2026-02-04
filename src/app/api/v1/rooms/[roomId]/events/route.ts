@@ -7,6 +7,7 @@ import { requireValidUUID } from '@/lib/validation';
 import { handleApiError, Errors } from '@/lib/errors';
 import { touchRoomPresence } from '@/lib/presence';
 import { maybeInsertRecapForTurn } from '@/lib/recap';
+import { bumpTurnAssigned, bumpTurnTaken } from '@/lib/reliability';
 import { rateLimit } from '@/lib/rate';
 import { getRoomTurnOrder } from '@/lib/turn-order';
 import { checkTextPolicy } from '@/lib/safety';
@@ -199,7 +200,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
         updated_at = NOW()
       FROM validated_turn, event_inserted
       WHERE rts.room_id = ${roomId}
-      RETURNING rts.current_bot_id AS next_bot_id, rts.turn_index AS turn_index
+      RETURNING rts.current_bot_id AS next_bot_id,
+                rts.turn_index AS turn_index,
+                (SELECT current_bot_id FROM locked_turn) AS prev_bot_id
     `;
 
     if (result.rowCount === 0) {
@@ -217,8 +220,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
 
     const nextBotIdFromDb = (result.rows[0] as { next_bot_id: string | null }).next_bot_id;
     const newTurnIndex = (result.rows[0] as { turn_index: number }).turn_index;
+    const prevBotId = (result.rows[0] as { prev_bot_id: string | null }).prev_bot_id;
 
     await touchRoomPresence(roomId, bot.id);
+
+    // Best-effort bot reliability counters.
+    try {
+      if (prevBotId && prevBotId === bot.id) await bumpTurnTaken(bot.id);
+      await bumpTurnAssigned(nextBotIdFromDb);
+    } catch {
+      // ignore
+    }
 
     // Best-effort spectator recaps: every N turns, append a deterministic excerpt recap event.
     // (Do not block success if this fails.)

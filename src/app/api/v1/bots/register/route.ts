@@ -3,7 +3,6 @@ import crypto from 'node:crypto';
 import { envBool, envInt } from '@/lib/config';
 import { getClientIp, rateLimit } from '@/lib/rate';
 import { sql } from '@vercel/postgres';
-// base URL derived from request origin
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 import { logTelemetry } from '@/lib/telemetry';
@@ -39,32 +38,41 @@ export async function POST(req: Request) {
       }
     }
 
-  const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `bot-${crypto.randomUUID().slice(0, 8)}`;
-  const description = typeof body.description === 'string' ? body.description.slice(0, 280) : '';
+    const name =
+      typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `bot-${crypto.randomUUID().slice(0, 8)}`;
+    const description = typeof body.description === 'string' ? body.description.slice(0, 280) : '';
 
-  const id = crypto.randomUUID();
-  const api_key = `dal_${crypto.randomUUID().replace(/-/g, '')}`;
-  const claim_token = `claim_${crypto.randomUUID().replace(/-/g, '')}`;
-  
-  // Base URL: use the origin of *this request* (avoids Vercel preview/protection domains)
-  const baseUrl = new URL(req.url).origin;
-  const claim_url = `${baseUrl}/claim/${claim_token}`;
+    const id = crypto.randomUUID();
+    const api_key = `dal_${crypto.randomUUID().replace(/-/g, '')}`;
+    const claim_token = `claim_${crypto.randomUUID().replace(/-/g, '')}`;
 
-  await sql`
-    INSERT INTO bots (id, name, description, api_key, claim_token, claimed)
-    VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE)
-  `;
+    // Base URL: use the origin of *this request* (avoids Vercel preview/protection domains)
+    const baseUrl = new URL(req.url).origin;
+    const claim_url = `${baseUrl}/claim/${claim_token}`;
 
-  await logTelemetry({
-    kind: 'bot_register',
-    ok: true,
-    botId: id,
-    meta: { ip: getClientIp(req) },
-  });
+    await sql`
+      INSERT INTO bots (id, name, description, api_key, claim_token, claimed)
+      VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE)
+    `;
+
+    await logTelemetry({
+      kind: 'bot_register',
+      ok: true,
+      botId: id,
+      meta: { ip: getClientIp(req) },
+    });
 
     return NextResponse.json(
       {
-        bot: { id, name, description, api_key, claim_url },
+        bot: {
+          id,
+          name,
+          description,
+          api_key,
+          claim_url,
+          claimed: false,
+          owner_label: '',
+        },
         important: 'SAVE YOUR API KEY! You need it for all bot actions.',
       },
       { status: 201, headers: { 'x-request-id': requestId } },

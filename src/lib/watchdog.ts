@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { sql } from '@vercel/postgres';
 import { maybeInsertRecapForTurn } from '@/lib/recap';
 import { getRoomTurnOrder } from '@/lib/turn-order';
+import { bumpTurnAssigned, bumpWatchdogTimeout } from '@/lib/reliability';
 
 export type WatchdogAdvanceResult =
   | { ok: true; advanced: false; reason: 'not-stuck' | 'room-not-open' | 'no-turn' | 'no-members' }
@@ -134,6 +135,14 @@ export async function maybeAdvanceStuckTurn(roomId: string, stuckMs: number): Pr
 
     // Best-effort recap insertion on turn boundaries.
     await maybeInsertRecapForTurn(roomId, turnIndex);
+
+    // Best-effort reliability counters.
+    try {
+      await bumpWatchdogTimeout(fromBotId);
+      await bumpTurnAssigned(toBotId);
+    } catch {
+      // ignore
+    }
 
     return {
       ok: true,
