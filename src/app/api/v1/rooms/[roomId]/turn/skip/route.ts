@@ -5,6 +5,9 @@ import { sql } from '@vercel/postgres';
 import { requireValidUUID } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
+import { touchRoomPresence } from '@/lib/presence';
+import { maybeInsertRecapForTurn } from '@/lib/recap';
+import { getRoomTurnOrder } from '@/lib/turn-order';
 
 export async function POST(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
@@ -13,9 +16,14 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
     requireValidUUID(roomId, 'roomId');
     const bot = await requireBot(_req);
 
-    const room = await sql`SELECT dm_bot_id FROM rooms WHERE id = ${roomId} LIMIT 1`;
+    const room = await sql`SELECT dm_bot_id, status FROM rooms WHERE id = ${roomId} LIMIT 1`;
     if (room.rowCount === 0) {
       const { status, response } = handleApiError(new Error('Room not found'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
+    const statusStr = String((room.rows[0] as { status: string }).status || '').toUpperCase();
+    if (statusStr !== 'OPEN') {
+      const { status, response } = handleApiError(new Error('Room is closed'), requestId);
       return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
     const dmBotId = (room.rows[0] as { dm_bot_id: string }).dm_bot_id;
@@ -24,20 +32,12 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
       return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
 
-    // Get member order first (read-only, stable data)
-    const members = await sql`
-      SELECT m.bot_id, m.role
-      FROM room_members m
-      WHERE m.room_id = ${roomId}
-      ORDER BY (CASE WHEN m.role = 'DM' THEN 0 ELSE 1 END), m.joined_at ASC
-    `;
+    const { botIds: order } = await getRoomTurnOrder(roomId);
 
-    if (members.rowCount === 0) {
+    if (!order.length) {
       const { status, response } = handleApiError(new Error('Turn state missing'), requestId);
       return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
-
-    const order = members.rows.map((r) => (r as { bot_id: string }).bot_id);
 
     // Get current bot with lock, calculate next in JS, then update atomically
     // The FOR UPDATE lock is released after query, but we update immediately to minimize race window
@@ -69,7 +69,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
           turn_index = turn_index + 1,
           updated_at = NOW()
         WHERE room_id = ${roomId}
-        RETURNING current_bot_id AS new_current_bot_id
+        RETURNING current_bot_id AS new_current_bot_id, turn_index
       ),
       event_inserted AS (
         INSERT INTO room_events (id, room_id, bot_id, kind, content)
@@ -77,7 +77,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
         FROM turn_updated
         RETURNING id
       )
-      SELECT ${currentBotId} AS skipped_bot_id, new_current_bot_id AS next_bot_id
+      SELECT ${currentBotId} AS skipped_bot_id, new_current_bot_id AS next_bot_id, turn_index
       FROM turn_updated
     `;
 
@@ -86,9 +86,18 @@ export async function POST(_req: Request, ctx: { params: Promise<{ roomId: strin
       return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
 
-    const row = result.rows[0] as { skipped_bot_id: string | null; next_bot_id: string | null };
+    const row = result.rows[0] as { skipped_bot_id: string | null; next_bot_id: string | null; turn_index: number };
     const skippedBotId = row.skipped_bot_id;
     const nextBotIdFromDb = row.next_bot_id;
+
+    await touchRoomPresence(roomId, bot.id);
+
+    // Best-effort spectator recaps: every N turns, append a deterministic excerpt recap event.
+    try {
+      await maybeInsertRecapForTurn(roomId, row.turn_index);
+    } catch {
+      // ignore
+    }
 
     return NextResponse.json({ ok: true, skippedBotId, nextBotId: nextBotIdFromDb }, { headers: { 'x-request-id': requestId } });
   } catch (e: unknown) {

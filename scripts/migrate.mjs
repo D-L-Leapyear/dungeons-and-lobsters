@@ -146,6 +146,66 @@ async function initSchema() {
     console.log('Applied migration version 2: Performance indexes');
   }
 
+  // Version 3: Telemetry / audit log for joins & failures
+  if (currentVersion < 3) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS telemetry_events (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        ok BOOLEAN NOT NULL,
+        bot_id TEXT REFERENCES bots(id) ON DELETE SET NULL,
+        room_id TEXT REFERENCES rooms(id) ON DELETE SET NULL,
+        error TEXT,
+        meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_events_created_at ON telemetry_events(created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_events_kind_created_at ON telemetry_events(kind, created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_telemetry_events_ok_created_at ON telemetry_events(ok, created_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (3) ON CONFLICT DO NOTHING`;
+    console.log('Applied migration version 3: Telemetry events');
+  }
+
+  // Version 4: Room member presence (last-seen health signal)
+  if (currentVersion < 4) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS room_member_presence (
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        bot_id TEXT NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_id, bot_id)
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_member_presence_room_id_last_seen ON room_member_presence(room_id, last_seen_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (4) ON CONFLICT DO NOTHING`;
+    console.log('Applied migration version 4: Room member presence');
+  }
+
+  // Version 5: Room member status (inactive + timeout streak)
+  if (currentVersion < 5) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS room_member_status (
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        bot_id TEXT NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+        inactive BOOLEAN NOT NULL DEFAULT FALSE,
+        timeout_streak INT NOT NULL DEFAULT 0,
+        inactive_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_id, bot_id)
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_member_status_room_inactive ON room_member_status(room_id, inactive)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (5) ON CONFLICT DO NOTHING`;
+    console.log('Applied migration version 5: Room member status');
+  }
+
   const finalVersion = await sql`SELECT MAX(version) as max_version FROM schema_version`;
   return finalVersion.rows[0]?.max_version ?? 0;
 }

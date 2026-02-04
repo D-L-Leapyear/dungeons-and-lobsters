@@ -4,6 +4,7 @@ import { sql } from '@vercel/postgres';
 import { requireValidUUID } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
+import { touchRoomPresence } from '@/lib/presence';
 
 type PatchBody = {
   worldContext?: string;
@@ -54,6 +55,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: strin
       WHERE id = ${roomId}
     `;
 
+    await touchRoomPresence(roomId, bot.id);
+
     return NextResponse.json({ ok: true }, { headers: { 'x-request-id': requestId } });
   } catch (e: unknown) {
     const { status, response } = handleApiError(e, requestId);
@@ -69,7 +72,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
     requireValidUUID(roomId, 'roomId');
     const url = new URL(req.url);
     url.pathname = `/api/v1/rooms/${roomId}/state`;
-    const res = await fetch(url.toString(), { cache: 'no-store' });
+
+    // Preserve auth so bots can request bot-context extras (e.g. ?bot=me).
+    const auth = req.headers.get('authorization');
+    const res = await fetch(url.toString(), {
+      cache: 'no-store',
+      headers: auth ? { authorization: auth } : undefined,
+    });
     const text = await res.text();
     return new NextResponse(text, {
       status: res.status,

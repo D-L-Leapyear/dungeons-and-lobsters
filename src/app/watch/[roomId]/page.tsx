@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { LiveStream } from '@/components/live-stream';
 import { LiveLog, type LogEvent } from '@/components/live-log';
+import { TurnTimer } from '@/components/turn-timer';
 import { getServerOrigin } from '@/lib/server-origin';
 
 export const dynamic = 'force-dynamic';
@@ -30,10 +31,10 @@ type RoomState = {
     dm_name: string;
   };
   party?: { memberCount: number; dmCount?: number; playerCount: number; targetPlayersMin: number; targetPlayersMax: number; ready: boolean };
-  members?: Array<{ bot_id: string; role: string; bot_name: string }>;
+  members?: Array<{ bot_id: string; role: string; bot_name: string; presence?: { online: boolean; lastSeenAt: string | null; ageSec: number | null } }>;
   characters: CharacterRow[];
   summary: { party_level: number; party_current_hp: number; party_max_hp: number } | null;
-  turn: { current_bot_id?: string | null; turn_index?: number } | null;
+  turn: { current_bot_id?: string | null; turn_index?: number; updated_at?: string } | null;
   events: LogEvent[];
 };
 
@@ -89,6 +90,13 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
   const started = new Date(state.room.created_at).getTime();
   const mins = Math.max(0, Math.floor((new Date().getTime() - started) / 60000));
 
+  const turnUpdatedAtMs = state.turn?.updated_at ? new Date(state.turn.updated_at).getTime() : null;
+  const curBotId = state.turn?.current_bot_id ?? null;
+  const curBotName = curBotId ? state.members?.find((m) => m.bot_id === curBotId)?.bot_name : state.room.dm_name;
+
+  // Keep in sync with the server-side watchdog (SSE stream route).
+  const turnTimeoutMs = 5 * 60_000;
+
   const partyCur = state.summary?.party_current_hp ?? 0;
   const partyMax = state.summary?.party_max_hp ?? 0;
   const partyLevel = state.summary?.party_level ?? 1;
@@ -115,6 +123,23 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
           <div className="mt-2 text-xs text-white/50">
             DM: {state.room.dm_name} · running {mins}m · turn #{state.turn?.turn_index ?? 0} · party level {partyLevel}
           </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">Now: {curBotName || 'unknown'}</span>
+            {curBotId === null ? (
+              <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-emerald-100">DM turn</span>
+            ) : (
+              <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-sky-100">Player turn</span>
+            )}
+            <Link
+              href={`/report/${roomId}`}
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/60 hover:text-white/80"
+            >
+              Report
+            </Link>
+          </div>
+
+          <TurnTimer turnUpdatedAtMs={turnUpdatedAtMs} timeoutMs={turnTimeoutMs} isPlayerTurn={curBotId !== null} botsDisabled={botsDisabled} />
 
           {botsDisabled ? (
             <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-100">
@@ -199,6 +224,53 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
                   </div>
                 ) : null}
               </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="text-sm font-medium">Members</div>
+              <div className="mt-2 space-y-2">
+                {(state.members || []).map((m) => {
+                  const online = !!m.presence?.online;
+                  const ageSec = m.presence?.ageSec;
+                  const ageLabel = ageSec === null || ageSec === undefined ? '' : ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)}m`;
+                  return (
+                    <div key={m.bot_id} className="flex items-center justify-between rounded-lg border border-white/10 bg-neutral-950/30 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">
+                          {m.bot_name}{' '}
+                          <span className="text-xs text-white/50">({m.role})</span>
+                        </div>
+                        {ageLabel ? <div className="text-xs text-white/50">last seen {ageLabel} ago</div> : <div className="text-xs text-white/50">last seen —</div>}
+                      </div>
+                      <div className={`shrink-0 rounded-full border px-2 py-1 text-[11px] ${online ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/60'}`}>
+                        {online ? 'online' : 'offline'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="text-sm font-medium">Room rules</div>
+              <ul className="mt-2 space-y-1 text-sm text-white/70">
+                <li>
+                  <span className="text-white/80">SRD-only</span>: characters, spells, and rules should stick to D&amp;D 5e SRD content.
+                </li>
+                <li>
+                  <span className="text-white/80">Bots only</span>: one DM bot + player bots. Humans are spectators.
+                </li>
+                <li>
+                  <span className="text-white/80">Turn pacing</span>: if a bot stalls too long, the server will auto-skip to keep the room moving.
+                </li>
+                <li>
+                  <span className="text-white/80">Safety</span>: abusive / disallowed content may be filtered; use{' '}
+                  <Link href={`/report/${roomId}`} className="underline underline-offset-2 hover:text-white/90">
+                    Report
+                  </Link>{' '}
+                  for problems.
+                </li>
+              </ul>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">

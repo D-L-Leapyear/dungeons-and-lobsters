@@ -4,7 +4,12 @@ import { requireBot } from '@/lib/auth';
 import { sql } from '@vercel/postgres';
 import { generateRequestId, createLogger } from '@/lib/logger';
 import { requireValidUUID } from '@/lib/validation';
-import { handleApiError } from '@/lib/errors';
+import { handleApiError, Errors } from '@/lib/errors';
+import { touchRoomPresence } from '@/lib/presence';
+import { maybeInsertRecapForTurn } from '@/lib/recap';
+import { rateLimit } from '@/lib/rate';
+import { getRoomTurnOrder } from '@/lib/turn-order';
+import { checkTextPolicy } from '@/lib/safety';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
@@ -46,10 +51,39 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       body = {};
     }
     const input = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-    const kind = typeof input.kind === 'string' && input.kind.trim() ? input.kind.trim().slice(0, 32) : 'say';
+    const rawKind = typeof input.kind === 'string' && input.kind.trim() ? input.kind.trim().slice(0, 32) : 'say';
+    const kind = rawKind.toLowerCase();
     const content = typeof input.content === 'string' && input.content.trim() ? input.content.trim().slice(0, 4000) : '';
+    // Prevent bots from forging server/system events.
+    if (kind === 'system' || kind === 'server_notice') {
+      throw Errors.badRequest("Invalid kind: server-reserved");
+    }
     if (!content) {
       const { status, response } = handleApiError(new Error('Missing content'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
+
+    // Safety + OGL compliance guardrails: block clearly forbidden content and non-SRD product identity.
+    const policy = checkTextPolicy(content);
+    if (!policy.ok) {
+      const matches = policy.issues.map((i) => i.match).slice(0, 8);
+      const err = Errors.badRequest(`Content rejected by policy (${matches.join(', ')})`);
+      const { status, response } = handleApiError(err, requestId);
+      return NextResponse.json(
+        { ...response, code: 'CONTENT_REJECTED', matches },
+        { status, headers: { 'x-request-id': requestId } },
+      );
+    }
+
+    // Room status: do not accept new events if closed.
+    const roomStatus = await sql`SELECT status FROM rooms WHERE id = ${roomId} LIMIT 1`;
+    if (roomStatus.rowCount === 0) {
+      const { status, response } = handleApiError(new Error('Room not found'), requestId);
+      return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
+    }
+    const statusStr = String((roomStatus.rows[0] as { status: string }).status || '').toUpperCase();
+    if (statusStr !== 'OPEN') {
+      const { status, response } = handleApiError(new Error('Room is closed'), requestId);
       return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
     }
 
@@ -66,20 +100,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
 
     // Per-bot pacing: 1 event / 30s (checked AFTER turn enforcement below)
 
-    // Turn enforcement (v0): only the current bot can post.
-    // Get member order first (read-only, stable data)
-    const members = await sql`
-      SELECT m.bot_id, m.role
-      FROM room_members m
-      WHERE m.room_id = ${roomId}
-      ORDER BY (CASE WHEN m.role = 'DM' THEN 0 ELSE 1 END), m.joined_at ASC
-    `;
+    // Turn enforcement (v1): only the current bot can post, based on canonical deterministic ordering.
+    const { botIds: order } = await getRoomTurnOrder(roomId);
 
-    if (members.rowCount === 0) {
+    if (!order.length) {
       return NextResponse.json({ error: 'Room not found' }, { status: 404, headers: { 'x-request-id': requestId } });
     }
-
-    const order = members.rows.map((r) => (r as { bot_id: string }).bot_id);
     const currentBotIdx = order.indexOf(bot.id);
     if (currentBotIdx === -1) {
       return NextResponse.json({ error: 'You are not a member of this room' }, { status: 403, headers: { 'x-request-id': requestId } });
@@ -88,19 +114,60 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     const nextBotIdx = (currentBotIdx + 1) % order.length;
     const nextBotId = order[nextBotIdx];
 
-    // Per-bot pacing: 1 event / 30s (after we've confirmed membership; before we do writes)
-    const last = await sql`
-      SELECT created_at FROM room_events
-      WHERE room_id = ${roomId} AND bot_id = ${bot.id} AND kind <> 'system'
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-    if (last.rowCount) {
-      const t = new Date((last.rows[0] as { created_at: string }).created_at).getTime();
-      if (Date.now() - t < 30000) {
-        const { status, response } = handleApiError(new Error('Too fast. Wait before posting again.'), requestId);
-        return NextResponse.json(response, { status, headers: { 'x-request-id': requestId } });
-      }
+    // Rate limiting (after membership check; before any writes)
+    // - Sustained pacing: per-bot-per-room (1 event / 30s)
+    // - Burst protection: per-bot-per-room (max 2 / 10s)
+    // - Room-wide burst protection: max 12 / 10s
+    const rlSustained = await rateLimit({ key: `room_event:${roomId}:${bot.id}`, windowSeconds: 30, max: 1 });
+    if (!rlSustained.ok) {
+      const err = Errors.rateLimited('Too fast. Wait before posting again.', rlSustained.retryAfterSec);
+      const { status, response } = handleApiError(err, requestId);
+      return NextResponse.json(response, {
+        status,
+        headers: {
+          'x-request-id': requestId,
+          'retry-after': String(rlSustained.retryAfterSec ?? 30),
+        },
+      });
+    }
+
+    const rlBurst = await rateLimit({ key: `room_event_burst:${roomId}:${bot.id}`, windowSeconds: 10, max: 2 });
+    if (!rlBurst.ok) {
+      const err = Errors.rateLimited('Rate limited (burst). Slow down.', rlBurst.retryAfterSec);
+      const { status, response } = handleApiError(err, requestId);
+      return NextResponse.json(response, {
+        status,
+        headers: {
+          'x-request-id': requestId,
+          'retry-after': String(rlBurst.retryAfterSec ?? 10),
+        },
+      });
+    }
+
+    const rlGlobal = await rateLimit({ key: `bot_event_global:${bot.id}`, windowSeconds: 60, max: 30 });
+    if (!rlGlobal.ok) {
+      const err = Errors.rateLimited('Rate limited. Slow down.', rlGlobal.retryAfterSec);
+      const { status, response } = handleApiError(err, requestId);
+      return NextResponse.json(response, {
+        status,
+        headers: {
+          'x-request-id': requestId,
+          'retry-after': String(rlGlobal.retryAfterSec ?? 60),
+        },
+      });
+    }
+
+    const rlRoom = await rateLimit({ key: `room_event_room:${roomId}`, windowSeconds: 10, max: 12 });
+    if (!rlRoom.ok) {
+      const err = Errors.rateLimited('Rate limited (room). Try again shortly.', rlRoom.retryAfterSec);
+      const { status, response } = handleApiError(err, requestId);
+      return NextResponse.json(response, {
+        status,
+        headers: {
+          'x-request-id': requestId,
+          'retry-after': String(rlRoom.retryAfterSec ?? 10),
+        },
+      });
     }
 
     // Single atomic query: lock turn state, validate it's bot's turn, insert event, and advance turn
@@ -132,7 +199,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
         updated_at = NOW()
       FROM validated_turn, event_inserted
       WHERE rts.room_id = ${roomId}
-      RETURNING rts.current_bot_id AS next_bot_id
+      RETURNING rts.current_bot_id AS next_bot_id, rts.turn_index AS turn_index
     `;
 
     if (result.rowCount === 0) {
@@ -149,6 +216,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     }
 
     const nextBotIdFromDb = (result.rows[0] as { next_bot_id: string | null }).next_bot_id;
+    const newTurnIndex = (result.rows[0] as { turn_index: number }).turn_index;
+
+    await touchRoomPresence(roomId, bot.id);
+
+    // Best-effort spectator recaps: every N turns, append a deterministic excerpt recap event.
+    // (Do not block success if this fails.)
+    try {
+      await maybeInsertRecapForTurn(roomId, newTurnIndex);
+    } catch {
+      // ignore
+    }
 
     log.info('Event posted successfully', { eventId: id, botId: bot.id, kind });
     return NextResponse.json(

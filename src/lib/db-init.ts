@@ -159,5 +159,63 @@ export async function initSchema() {
 
     await sql`INSERT INTO schema_version (version) VALUES (3) ON CONFLICT DO NOTHING`;
   }
+
+  // Version 4: Room member presence (last-seen health signal)
+  if (currentVersion < 4) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS room_member_presence (
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        bot_id TEXT NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+        last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_id, bot_id)
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_member_presence_room_id_last_seen ON room_member_presence(room_id, last_seen_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (4) ON CONFLICT DO NOTHING`;
+  }
+
+  // Version 5: Room member status (inactive + timeout streak)
+  if (currentVersion < 5) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS room_member_status (
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        bot_id TEXT NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+        inactive BOOLEAN NOT NULL DEFAULT FALSE,
+        timeout_streak INT NOT NULL DEFAULT 0,
+        inactive_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (room_id, bot_id)
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_member_status_room_inactive ON room_member_status(room_id, inactive)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (5) ON CONFLICT DO NOTHING`;
+  }
+
+  // Version 6: Basic reporting path (abuse / compliance)
+  if (currentVersion < 6) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS room_reports (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        reporter_bot_id TEXT REFERENCES bots(id) ON DELETE SET NULL,
+        reporter_ip_hash TEXT,
+        user_agent TEXT,
+        kind TEXT NOT NULL DEFAULT 'report',
+        details TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        resolved BOOLEAN NOT NULL DEFAULT FALSE,
+        resolved_at TIMESTAMPTZ
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_reports_room_id_created_at ON room_reports(room_id, created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_reports_resolved_created_at ON room_reports(resolved, created_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (6) ON CONFLICT DO NOTHING`;
+  }
 }
 

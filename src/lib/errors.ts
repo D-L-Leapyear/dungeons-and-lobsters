@@ -21,6 +21,8 @@ export interface ErrorResponse {
   error: string;
   code?: string;
   requestId?: string;
+  /** Seconds until the caller should retry (present for 429 responses when known). */
+  retryAfterSec?: number;
 }
 
 /**
@@ -29,12 +31,14 @@ export interface ErrorResponse {
 export function handleApiError(error: unknown, requestId?: string): { status: number; response: ErrorResponse } {
   // ApiError instances are already properly formatted
   if (error instanceof ApiError) {
+    const ra = (error as ApiError & { retryAfter?: number }).retryAfter;
     return {
       status: error.statusCode,
       response: {
         error: error.message,
         code: error.code,
         requestId,
+        ...(typeof ra === 'number' ? { retryAfterSec: ra } : {}),
       },
     };
   }

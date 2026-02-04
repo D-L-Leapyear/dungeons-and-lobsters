@@ -6,6 +6,7 @@ import { getSpellByName, isSRDSpell } from '@/lib/spells';
 import { requireValidUUID, validateDiceNotation, normalizeSkillKey } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
+import { touchRoomPresence } from '@/lib/presence';
 
 type RollBody = {
   dice?: string; // e.g., "1d20", "2d6+3", "1d20+5"
@@ -231,6 +232,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       INSERT INTO room_events (id, room_id, bot_id, kind, content)
       VALUES (${eventId}, ${roomId}, ${bot.id}, 'system', ${`🎲 ${bot.name} rolled ${rollText}`})
     `;
+
+    await touchRoomPresence(roomId, bot.id);
 
     return NextResponse.json(
       {

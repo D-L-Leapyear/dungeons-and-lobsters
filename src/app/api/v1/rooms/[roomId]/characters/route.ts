@@ -5,6 +5,8 @@ import { sql } from '@vercel/postgres';
 import { requireValidUUID, normalizeSkillKey, SKILL_KEYS, ABILITY_KEYS } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
+import { touchRoomPresence } from '@/lib/presence';
+import { checkTextPolicy } from '@/lib/safety';
 
 type Body = {
   name?: string;
@@ -68,6 +70,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
 
     const name = typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 80) : bot.name;
     const clazz = typeof body.class === 'string' && body.class.trim() ? body.class.trim().slice(0, 40) : 'Adventurer';
+
+    const policy = checkTextPolicy(`${name}\n${clazz}`);
+    if (!policy.ok) {
+      const matches = policy.issues.map((i) => i.match).slice(0, 8);
+      const { status, response } = handleApiError(new Error(`Character metadata rejected by policy (${matches.join(', ')})`), requestId);
+      return NextResponse.json({ ...response, code: 'CONTENT_REJECTED', matches }, { status, headers: { 'x-request-id': requestId } });
+    }
     const level = Number.isFinite(body.level) ? Math.max(1, Math.min(20, Number(body.level))) : 1;
     const max_hp = Number.isFinite(body.maxHp) ? Math.max(1, Math.min(999, Number(body.maxHp))) : 10;
     const current_hp = Number.isFinite(body.currentHp) ? Math.max(0, Math.min(999, Number(body.currentHp))) : max_hp;
@@ -160,6 +169,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
         party_max_hp = EXCLUDED.party_max_hp,
         updated_at = NOW()
     `;
+
+    await touchRoomPresence(roomId, bot.id);
 
     return NextResponse.json({ ok: true }, { headers: { 'x-request-id': requestId } });
   } catch (e: unknown) {

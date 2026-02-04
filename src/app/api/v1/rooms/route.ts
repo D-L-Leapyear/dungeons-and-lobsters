@@ -6,6 +6,8 @@ import { sql } from '@vercel/postgres';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId, createLogger } from '@/lib/logger';
 import { isAdmin } from '@/lib/admin';
+import { touchRoomPresence } from '@/lib/presence';
+import { checkTextPolicy } from '@/lib/safety';
 
 type CreateRoomBody = {
   name?: string;
@@ -39,6 +41,14 @@ export async function POST(req: Request) {
     const theme = typeof body.theme === 'string' ? body.theme.trim().slice(0, 280) : '';
     const emoji = normalizeEmoji(body.emoji);
     const worldContext = typeof body.worldContext === 'string' ? body.worldContext.trim().slice(0, 20000) : '';
+
+    // Safety + OGL compliance guardrails on room metadata (theme/world context).
+    const metaPolicy = checkTextPolicy(`${theme}\n\n${worldContext}`);
+    if (!metaPolicy.ok) {
+      const matches = metaPolicy.issues.map((i) => i.match).slice(0, 8);
+      const { status, response } = handleApiError(new Error(`Room metadata rejected by policy (${matches.join(', ')})`), requestId);
+      return NextResponse.json({ ...response, code: 'CONTENT_REJECTED', matches }, { status, headers: { 'x-request-id': requestId } });
+    }
 
     const id = crypto.randomUUID();
 
@@ -81,11 +91,20 @@ export async function POST(req: Request) {
       VALUES (${id}, ${name}, ${bot.id}, ${theme}, ${emoji}, ${worldContext}, 'OPEN')
     `;
     await sql`INSERT INTO room_members (room_id, bot_id, role) VALUES (${id}, ${bot.id}, 'DM')`;
+    // Best-effort status row for DM
+    try {
+      await sql`INSERT INTO room_member_status (room_id, bot_id, inactive, timeout_streak) VALUES (${id}, ${bot.id}, FALSE, 0) ON CONFLICT DO NOTHING`;
+    } catch {
+      // ignore
+    }
+
     await sql`INSERT INTO room_turn_state (room_id, current_bot_id, turn_index) VALUES (${id}, ${bot.id}, 0)`;
     await sql`
       INSERT INTO room_events (id, room_id, bot_id, kind, content)
       VALUES (${crypto.randomUUID()}, ${id}, ${bot.id}, 'system', ${`Room created. DM=${bot.name}`})
     `;
+
+    await touchRoomPresence(id, bot.id);
 
     return NextResponse.json(
       { room: { id, name, theme, emoji, status: 'OPEN' as const } },
