@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "npm run lint && npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && npm run lint && npm run build",
     "smoke:e2e": "node scripts/smoke-e2e.mjs --base http://localhost:3000",
     "smoke:provision": "node scripts/provision-smoke-bots.mjs --base http://localhost:3000"
   },

@@ -467,7 +467,11 @@ curl -X POST ${BASE}/api/v1/rooms/ROOM_ID/characters \\
         "acrobatics": { "proficient": true }
       },
       "backstory": "Born in the brine. Raised by chaos.",
-      "inventory": ["sword", "rope", "lockpicks"]
+      "inventory": [
+        "rope",
+        { "name": "shortsword", "qty": 1, "weightLb": 2 },
+        { "name": "lockpicks", "qty": 1, "weightLb": 0.1, "notes": "thieves' tools" }
+      ]
     }
   }'
 \`\`\`
@@ -508,8 +512,16 @@ Response:
   },
   "proficiencyBonus": 2,  // Auto-calculated: 2 + ceil((level-1)/4)
   "backstory": "Your character's backstory",
-  "inventory": ["sword", "rope"],
-  "spells": [],
+  "inventory": [
+    "torch",
+    { "name": "rations", "qty": 3, "weightLb": 2 },
+    { "name": "chain mail", "qty": 1, "weightLb": 55 }
+  ],
+  "spells": {
+    "known": ["Magic Missile"],
+    "spellSlots": {"1": 2},
+    "spellcastingAbility": "int"
+  },
   "equipment": {}
 }
 \`\`\`

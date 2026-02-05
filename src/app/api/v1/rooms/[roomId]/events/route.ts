@@ -12,23 +12,109 @@ import { rateLimit } from '@/lib/rate';
 import { getRoomTurnOrder } from '@/lib/turn-order';
 import { checkTextPolicy } from '@/lib/safety';
 
-export async function GET(_req: Request, ctx: { params: Promise<{ roomId: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
   const requestId = generateRequestId();
   try {
     requireValidUUID(roomId, 'roomId');
-    const ev = await sql`
-      SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
-      FROM room_events e
-      LEFT JOIN bots b ON b.id = e.bot_id
-      WHERE e.room_id = ${roomId}
-      ORDER BY e.created_at ASC
-      LIMIT 500
-    `;
+
+    const url = new URL(req.url);
+    const limitRaw = Number(url.searchParams.get('limit') ?? '200');
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.floor(limitRaw))) : 200;
+
+    const before = url.searchParams.get('before');
+    const after = url.searchParams.get('after');
+
+    const qRaw = url.searchParams.get('q');
+    const q = typeof qRaw === 'string' && qRaw.trim() ? qRaw.trim().slice(0, 128) : null;
+
+    const kindRaw = url.searchParams.get('kind');
+    const kind = typeof kindRaw === 'string' && kindRaw.trim() ? kindRaw.trim().slice(0, 32).toLowerCase() : null;
+
+    const botRaw = url.searchParams.get('bot');
+    const bot = typeof botRaw === 'string' && botRaw.trim() ? botRaw.trim().slice(0, 64) : null;
+
+    // Default behavior is backwards pagination (load older):
+    // - if `before` is set, fetch events with created_at < before, newest-first, then reverse to ASC.
+    // - if `after` is set, fetch events with created_at > after, oldest-first.
+    // - else, return the most recent `limit` events.
+
+    let rows: Array<{ id: string; kind: string; content: string; created_at: string; bot_name: string | null }> = [];
+    let hasMore = false;
+
+    if (before) {
+      const beforeTs = new Date(before);
+      if (Number.isNaN(beforeTs.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid before cursor' },
+          { status: 400, headers: { 'x-request-id': requestId } },
+        );
+      }
+      const ev = await sql`
+        SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
+        FROM room_events e
+        LEFT JOIN bots b ON b.id = e.bot_id
+        WHERE e.room_id = ${roomId}
+          AND (e.hidden IS NOT TRUE)
+          AND e.created_at < ${beforeTs.toISOString()}::timestamptz
+          AND (${q}::text IS NULL OR e.content ILIKE ('%' || ${q} || '%'))
+          AND (${kind}::text IS NULL OR e.kind = ${kind})
+          AND (${bot}::text IS NULL OR COALESCE(b.name, '') ILIKE ('%' || ${bot} || '%'))
+        ORDER BY e.created_at DESC
+        LIMIT ${limit + 1}
+      `;
+      rows = ev.rows as typeof rows;
+      hasMore = rows.length > limit;
+      if (hasMore) rows = rows.slice(0, limit);
+      rows = rows.reverse();
+    } else if (after) {
+      const afterTs = new Date(after);
+      if (Number.isNaN(afterTs.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid after cursor' },
+          { status: 400, headers: { 'x-request-id': requestId } },
+        );
+      }
+      const ev = await sql`
+        SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
+        FROM room_events e
+        LEFT JOIN bots b ON b.id = e.bot_id
+        WHERE e.room_id = ${roomId}
+          AND (e.hidden IS NOT TRUE)
+          AND e.created_at > ${afterTs.toISOString()}::timestamptz
+          AND (${q}::text IS NULL OR e.content ILIKE ('%' || ${q} || '%'))
+          AND (${kind}::text IS NULL OR e.kind = ${kind})
+          AND (${bot}::text IS NULL OR COALESCE(b.name, '') ILIKE ('%' || ${bot} || '%'))
+        ORDER BY e.created_at ASC
+        LIMIT ${limit + 1}
+      `;
+      rows = ev.rows as typeof rows;
+      hasMore = rows.length > limit;
+      if (hasMore) rows = rows.slice(0, limit);
+    } else {
+      const ev = await sql`
+        SELECT e.id, e.kind, e.content, e.created_at, b.name as bot_name
+        FROM room_events e
+        LEFT JOIN bots b ON b.id = e.bot_id
+        WHERE e.room_id = ${roomId}
+          AND (e.hidden IS NOT TRUE)
+          AND (${q}::text IS NULL OR e.content ILIKE ('%' || ${q} || '%'))
+          AND (${kind}::text IS NULL OR e.kind = ${kind})
+          AND (${bot}::text IS NULL OR COALESCE(b.name, '') ILIKE ('%' || ${bot} || '%'))
+        ORDER BY e.created_at DESC
+        LIMIT ${limit + 1}
+      `;
+      rows = ev.rows as typeof rows;
+      hasMore = rows.length > limit;
+      if (hasMore) rows = rows.slice(0, limit);
+      rows = rows.reverse();
+    }
+
     const turn = await sql`SELECT room_id, current_bot_id, turn_index, updated_at FROM room_turn_state WHERE room_id = ${roomId} LIMIT 1`;
+
     return NextResponse.json(
-      { events: ev.rows, turn: turn.rows[0] ?? null },
-      { headers: { 'x-request-id': requestId } },
+      { events: rows, hasMore, turn: turn.rows[0] ?? null },
+      { headers: { 'x-request-id': requestId, 'cache-control': 'no-store' } },
     );
   } catch (e: unknown) {
     const { status, response } = handleApiError(e, requestId);

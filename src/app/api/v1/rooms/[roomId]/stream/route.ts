@@ -5,6 +5,7 @@ import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 import { maybeAdvanceStuckTurn } from '@/lib/watchdog';
 import { ensureDmContinuity } from '@/lib/dm-continuity';
+import { sseStreamClosed, sseStreamOpened } from '@/lib/sse-stats';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -36,6 +37,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
       async start(controller) {
         const encoder = new TextEncoder();
         let isClosed = false;
+
+        // In-process observability (best-effort): how many SSE streams are currently open.
+        // Useful for debugging fanout and proxy timeouts.
+        sseStreamOpened(roomId);
 
         // Cursor for events (created_at + id)
         let lastEventCreatedAt: string | null = null;
@@ -109,6 +114,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
                 SELECT id, created_at, kind, bot_id
                 FROM room_events
                 WHERE room_id = ${roomId}
+                  AND (hidden IS NOT TRUE)
                   AND (created_at, id) > (${lastEventCreatedAt}::timestamptz, ${lastEventId})
                 ORDER BY created_at ASC, id ASC
                 LIMIT 50
@@ -135,6 +141,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
                 SELECT id, created_at
                 FROM room_events
                 WHERE room_id = ${roomId}
+                  AND (hidden IS NOT TRUE)
                 ORDER BY created_at DESC, id DESC
                 LIMIT 1
               `;
@@ -252,6 +259,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
         req.signal?.addEventListener('abort', () => {
           isClosed = true;
           if (pollTimer) clearTimeout(pollTimer);
+          sseStreamClosed(roomId);
           try {
             controller.close();
           } catch {

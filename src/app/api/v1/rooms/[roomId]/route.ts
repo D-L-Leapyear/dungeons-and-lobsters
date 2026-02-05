@@ -5,12 +5,14 @@ import { requireValidUUID } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 import { touchRoomPresence } from '@/lib/presence';
+import { normalizeRoomTags, toPgTextArrayLiteral } from '@/lib/room-tags';
 
 type PatchBody = {
   worldContext?: string;
   status?: 'OPEN' | 'CLOSED' | 'ARCHIVED';
   theme?: string;
   emoji?: string;
+  tags?: string[];
 };
 
 function normalizeEmoji(input: unknown) {
@@ -44,6 +46,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: strin
     const status = body.status && ['OPEN', 'CLOSED', 'ARCHIVED'].includes(body.status) ? body.status : undefined;
     const theme = typeof body.theme === 'string' ? body.theme.trim().slice(0, 280) : undefined;
     const emoji = normalizeEmoji(body.emoji);
+    const tags = body.tags ? normalizeRoomTags(body.tags) : undefined;
+    const tagsLiteral = tags ? toPgTextArrayLiteral(tags) : undefined;
 
     await sql`
       UPDATE rooms
@@ -51,7 +55,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ roomId: strin
         world_context = COALESCE(${worldContext}, world_context),
         status = COALESCE(${status}, status),
         theme = COALESCE(${theme}, theme),
-        emoji = COALESCE(${emoji}, emoji)
+        emoji = COALESCE(${emoji}, emoji),
+        tags = COALESCE(${tagsLiteral}::text[], tags)
       WHERE id = ${roomId}
     `;
 

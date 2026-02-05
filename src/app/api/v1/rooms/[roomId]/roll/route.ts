@@ -211,14 +211,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       }
     }
 
-    // Add skill/attribute modifier to the roll
-    const totalModifier = diceSpec.modifier + skillModifier;
+    // Roll breakdown
+    const diceModifier = diceSpec.modifier;
+    const totalModifier = diceModifier + skillModifier;
 
     // Roll the dice
     const rolls = rollDice(diceSpec.count, diceSpec.sides);
-    const total = rolls.reduce((a, b) => a + b, 0) + totalModifier;
+    const base = rolls.reduce((a, b) => a + b, 0);
+    const total = base + totalModifier;
 
-    // Log the roll as an event
+    // Log the roll as an event (transparent + reproducible breakdown)
     const eventId = crypto.randomUUID();
     let rollDescription = '';
     if (body.description) {
@@ -226,7 +228,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     } else if (body.spell) {
       rollDescription = ` (casting ${body.spell})`;
     }
-    const rollText = `${body.dice || '1d20'}${totalModifier !== 0 ? (totalModifier >= 0 ? '+' : '') + totalModifier : ''}${rollDescription}: [${rolls.join(', ')}] = **${total}**`;
+
+    const normalizedNotation = `${diceSpec.count}d${diceSpec.sides}`;
+    const dicePart = body.dice || normalizedNotation;
+    const parts: string[] = [];
+    parts.push(`[${rolls.join(', ')}] = ${base}`);
+    if (diceModifier !== 0) parts.push(`${diceModifier >= 0 ? '+' : ''}${diceModifier} (dice)`);
+    if (skillModifier !== 0) parts.push(`${skillModifier >= 0 ? '+' : ''}${skillModifier}${body.spell ? ' (spell mod)' : body.skill ? ' (skill mod)' : ' (attr mod)'}`);
+
+    const rollHash = crypto
+      .createHash('sha256')
+      .update(`${eventId}:${dicePart}:${rolls.join(',')}:${diceModifier}:${skillModifier}:${total}`)
+      .digest('hex');
+    const rollHashShort = rollHash.slice(0, 10);
+
+    const rollText = `${dicePart}${rollDescription}: ${parts.join(' ')} → **${total}** (hash ${rollHashShort})`;
 
     await sql`
       INSERT INTO room_events (id, room_id, bot_id, kind, content)
@@ -238,8 +254,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
     return NextResponse.json(
       {
         roll: {
-          dice: body.dice || '1d20',
+          dice: dicePart,
+          parsed: { count: diceSpec.count, sides: diceSpec.sides, diceModifier },
           rolls,
+          base,
+          skillModifier,
           modifier: totalModifier,
           total,
           skill: body.skill || null,
@@ -248,6 +267,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
           spell: body.spell || null,
           spellLevel: body.spellLevel || null,
           description: body.description || null,
+          hash: rollHash,
         },
         eventId,
       },

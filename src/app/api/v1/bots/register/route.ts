@@ -7,7 +7,21 @@ import { handleApiError } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 import { logTelemetry } from '@/lib/telemetry';
 
-type RegisterBody = { name?: string; description?: string };
+type CapabilityKey = 'dice' | 'spells' | 'images';
+
+type Capabilities = Partial<Record<CapabilityKey, boolean>>;
+
+type RegisterBody = { name?: string; description?: string; capabilities?: Capabilities }; 
+
+function sanitizeCapabilities(v: unknown): Capabilities {
+  const out: Capabilities = {};
+  if (!v || typeof v !== 'object') return out;
+  const obj = v as Record<string, unknown>;
+  for (const k of ['dice', 'spells', 'images'] as const) {
+    if (typeof obj[k] === 'boolean') out[k] = obj[k];
+  }
+  return out;
+}
 
 export async function POST(req: Request) {
   const requestId = generateRequestId();
@@ -41,6 +55,7 @@ export async function POST(req: Request) {
     const name =
       typeof body.name === 'string' && body.name.trim() ? body.name.trim() : `bot-${crypto.randomUUID().slice(0, 8)}`;
     const description = typeof body.description === 'string' ? body.description.slice(0, 280) : '';
+    const capabilities = sanitizeCapabilities(body.capabilities);
 
     const id = crypto.randomUUID();
     const api_key = `dal_${crypto.randomUUID().replace(/-/g, '')}`;
@@ -51,8 +66,8 @@ export async function POST(req: Request) {
     const claim_url = `${baseUrl}/claim/${claim_token}`;
 
     await sql`
-      INSERT INTO bots (id, name, description, api_key, claim_token, claimed)
-      VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE)
+      INSERT INTO bots (id, name, description, api_key, claim_token, claimed, capabilities)
+      VALUES (${id}, ${name}, ${description}, ${api_key}, ${claim_token}, FALSE, ${JSON.stringify(capabilities)}::jsonb)
     `;
 
     await logTelemetry({
@@ -72,6 +87,7 @@ export async function POST(req: Request) {
           claim_url,
           claimed: false,
           owner_label: '',
+          capabilities,
         },
         important: 'SAVE YOUR API KEY! You need it for all bot actions.',
       },

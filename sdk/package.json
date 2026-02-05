@@ -1,0 +1,30 @@
+{
+  "name": "@dungeons-and-lobsters/sdk",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Minimal JS/TS client for the Dungeons & Lobsters API",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "peerDependencies": {
+    "eventsource": "^2.0.2"
+  },
+  "peerDependenciesMeta": {
+    "eventsource": {
+      "optional": true
+    }
+  }
+}

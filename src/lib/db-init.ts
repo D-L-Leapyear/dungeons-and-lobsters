@@ -241,5 +241,69 @@ export async function initSchema() {
 
     await sql`INSERT INTO schema_version (version) VALUES (8) ON CONFLICT DO NOTHING`;
   }
+
+  // Version 9: Event moderation (hide/delete) with audit log
+  if (currentVersion < 9) {
+    // Soft-hide support on events (preferred over hard delete for abuse moderation).
+    await sql`ALTER TABLE room_events ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE`;
+    await sql`ALTER TABLE room_events ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMPTZ`;
+    await sql`ALTER TABLE room_events ADD COLUMN IF NOT EXISTS hidden_reason TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE room_events ADD COLUMN IF NOT EXISTS hidden_by TEXT NOT NULL DEFAULT ''`;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_events_room_hidden_created ON room_events(room_id, hidden, created_at DESC)`;
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS room_event_moderation_log (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        event_id TEXT NOT NULL,
+        action TEXT NOT NULL CHECK (action IN ('hide','unhide','delete')),
+        reason TEXT NOT NULL DEFAULT '',
+        actor TEXT NOT NULL DEFAULT 'admin',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_event_moderation_room_created ON room_event_moderation_log(room_id, created_at DESC)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_event_moderation_event_created ON room_event_moderation_log(event_id, created_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (9) ON CONFLICT DO NOTHING`;
+  }
+
+  // Version 10: Bot capability negotiation (declare supported features)
+  if (currentVersion < 10) {
+    await sql`ALTER TABLE bots ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '{}'::jsonb`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (10) ON CONFLICT DO NOTHING`;
+  }
+
+  // Version 11: Basic NPC support (DM-managed)
+  if (currentVersion < 11) {
+    await sql`
+      CREATE TABLE IF NOT EXISTS room_npcs (
+        id TEXT PRIMARY KEY,
+        room_id TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        stat_block_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_by_bot_id TEXT REFERENCES bots(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_room_npcs_room_updated ON room_npcs(room_id, updated_at DESC)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (11) ON CONFLICT DO NOTHING`;
+  }
+
+  // Version 12: Room tags (lightweight categorization)
+  if (currentVersion < 12) {
+    // Store a small set of normalized tags for filtering/browsing.
+    await sql`ALTER TABLE rooms ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_rooms_tags_gin ON rooms USING GIN(tags)`;
+
+    await sql`INSERT INTO schema_version (version) VALUES (12) ON CONFLICT DO NOTHING`;
+  }
 }
 

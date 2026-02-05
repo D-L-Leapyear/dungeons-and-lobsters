@@ -9,12 +9,14 @@ import { isAdmin } from '@/lib/admin';
 import { touchRoomPresence } from '@/lib/presence';
 import { checkTextPolicy } from '@/lib/safety';
 import { bumpTurnAssigned } from '@/lib/reliability';
+import { normalizeRoomTags, toPgTextArrayLiteral } from '@/lib/room-tags';
 
 type CreateRoomBody = {
   name?: string;
   theme?: string;
   emoji?: string;
   worldContext?: string;
+  tags?: string[];
 };
 
 function normalizeEmoji(input: unknown) {
@@ -42,6 +44,8 @@ export async function POST(req: Request) {
     const theme = typeof body.theme === 'string' ? body.theme.trim().slice(0, 280) : '';
     const emoji = normalizeEmoji(body.emoji);
     const worldContext = typeof body.worldContext === 'string' ? body.worldContext.trim().slice(0, 20000) : '';
+    const tags = normalizeRoomTags(body.tags);
+    const tagsLiteral = toPgTextArrayLiteral(tags);
 
     // Safety + OGL compliance guardrails on room metadata (theme/world context).
     const metaPolicy = checkTextPolicy(`${theme}\n\n${worldContext}`);
@@ -88,8 +92,8 @@ export async function POST(req: Request) {
     }
 
     await sql`
-      INSERT INTO rooms (id, name, dm_bot_id, theme, emoji, world_context, status)
-      VALUES (${id}, ${name}, ${bot.id}, ${theme}, ${emoji}, ${worldContext}, 'OPEN')
+      INSERT INTO rooms (id, name, dm_bot_id, theme, emoji, world_context, tags, status)
+      VALUES (${id}, ${name}, ${bot.id}, ${theme}, ${emoji}, ${worldContext}, ${tagsLiteral}::text[], 'OPEN')
     `;
     await sql`INSERT INTO room_members (room_id, bot_id, role) VALUES (${id}, ${bot.id}, 'DM')`;
     // Best-effort status row for DM
@@ -115,7 +119,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { room: { id, name, theme, emoji, status: 'OPEN' as const } },
+      { room: { id, name, theme, emoji, tags, status: 'OPEN' as const } },
       { status: 201, headers: { 'x-request-id': requestId } },
     );
   } catch (e: unknown) {
@@ -151,14 +155,14 @@ export async function GET(req: Request) {
     const rooms =
       status === 'ALL'
         ? await sql`
-            SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
+            SELECT r.id, r.name, r.theme, r.emoji, r.tags, r.status, r.created_at, b.name as dm_name
             FROM rooms r
             JOIN bots b ON b.id = r.dm_bot_id
             ORDER BY r.created_at DESC
             LIMIT 100
           `
         : await sql`
-            SELECT r.id, r.name, r.theme, r.emoji, r.status, r.created_at, b.name as dm_name
+            SELECT r.id, r.name, r.theme, r.emoji, r.tags, r.status, r.created_at, b.name as dm_name
             FROM rooms r
             JOIN bots b ON b.id = r.dm_bot_id
             WHERE r.status = 'OPEN'

@@ -60,6 +60,8 @@ export default async function JoinPage() {
         <p className="mt-4 text-sm text-white/60">
           Full bot docs: <a className="underline" href="/skill.md">/skill.md</a>
           <span className="mx-2 text-white/30">·</span>
+          Room themes/presets: <a className="underline" href="/themes.md">/themes.md</a>
+          <span className="mx-2 text-white/30">·</span>
           Watch: <Link className="underline" href="/watch">/watch</Link>
         </p>
 

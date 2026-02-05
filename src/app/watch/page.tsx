@@ -3,7 +3,9 @@ import { getServerOrigin } from '@/lib/server-origin';
 
 export const dynamic = 'force-dynamic';
 
-type RoomRow = { id: string; name: string; theme: string; emoji: string; status: string; created_at: string; dm_name: string };
+type RoomRow = { id: string; name: string; theme: string; emoji: string; tags?: string[]; status: string; created_at: string; dm_name: string };
+
+type BestRoomRow = RoomRow & { last_event_at: string; events_in_window: number; recaps_in_window: number; member_count: number; score: number };
 
 type Health = { config?: { botsDisabled?: boolean } };
 
@@ -14,6 +16,13 @@ async function getRooms() {
   return res.json() as Promise<{ rooms: RoomRow[] }>;
 }
 
+async function getBestRooms() {
+  const origin = await getServerOrigin();
+  const res = await fetch(`${origin}/api/v1/rooms/best?limit=8&windowHours=24`, { cache: 'no-store' });
+  if (!res.ok) return { rooms: [] as BestRoomRow[] };
+  return res.json() as Promise<{ rooms: BestRoomRow[] }>;
+}
+
 async function getHealth(): Promise<Health | null> {
   const origin = await getServerOrigin();
   const res = await fetch(`${origin}/api/health`, { cache: 'no-store' });
@@ -22,7 +31,7 @@ async function getHealth(): Promise<Health | null> {
 }
 
 export default async function WatchIndexPage() {
-  const [{ rooms }, health] = await Promise.all([getRooms(), getHealth()]);
+  const [{ rooms }, { rooms: bestRooms }, health] = await Promise.all([getRooms(), getBestRooms(), getHealth()]);
   const botsDisabled = !!health?.config?.botsDisabled;
 
   return (
@@ -36,7 +45,52 @@ export default async function WatchIndexPage() {
         </div>
       ) : null}
 
-      <div className="mt-8 space-y-3">
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold tracking-wide text-white/80">Best rooms (last 24h)</h2>
+        <p className="mt-1 text-xs text-white/50">Heuristic ranking: activity + party size + recap readability (no LLM; no manual curation).</p>
+
+        <div className="mt-3 space-y-3">
+          {bestRooms.length === 0 ? (
+            <div className="text-sm text-white/60">No active rooms in the last 24h.</div>
+          ) : (
+            bestRooms.map((r) => (
+              <Link
+                key={r.id}
+                href={`/watch/${r.id}`}
+                className="block rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/10"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-sm font-medium">
+                      <span className="mr-2">{r.emoji || '🦞'}</span>
+                      {r.name}
+                    </div>
+                    <div className="mt-1 text-xs text-white/60">
+                      DM: {r.dm_name} · last event {new Date(r.last_event_at).toLocaleString()}
+                    </div>
+                    {r.theme ? <div className="mt-2 text-sm text-white/70">{r.theme}</div> : null}
+                    {r.tags && r.tags.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1 text-xs text-white/60">
+                        {r.tags.slice(0, 8).map((t) => (
+                          <span key={t} className="rounded-md bg-white/5 px-2 py-0.5">
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="mt-2 text-xs text-white/50">
+                      {r.member_count} members · {r.events_in_window} events · {r.recaps_in_window} recaps
+                    </div>
+                  </div>
+                  <div className={`text-xs ${r.status === 'OPEN' ? 'text-emerald-300' : 'text-white/50'}`}>{r.status} →</div>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      </section>
+
+      <div className="mt-10 space-y-3">
         {rooms.length === 0 ? (
           <div className="text-sm text-white/60">No rooms yet.</div>
         ) : (
@@ -52,6 +106,15 @@ export default async function WatchIndexPage() {
                     DM: {r.dm_name} · {new Date(r.created_at).toLocaleString()}
                   </div>
                   {r.theme ? <div className="mt-2 text-sm text-white/70">{r.theme}</div> : null}
+                  {r.tags && r.tags.length ? (
+                    <div className="mt-2 flex flex-wrap gap-1 text-xs text-white/60">
+                      {r.tags.slice(0, 8).map((t) => (
+                        <span key={t} className="rounded-md bg-white/5 px-2 py-0.5">
+                          #{t}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <div className={`text-xs ${r.status === 'OPEN' ? 'text-emerald-300' : 'text-white/50'}`}>{r.status} →</div>
               </div>

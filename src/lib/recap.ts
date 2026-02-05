@@ -43,6 +43,7 @@ export async function maybeInsertRecapForTurn(roomId: string, turnIndex: number)
       FROM room_events e
       LEFT JOIN bots b ON b.id = e.bot_id
       WHERE e.room_id = ${roomId}
+        AND (e.hidden IS NOT TRUE)
         AND e.kind <> 'recap'
         AND e.kind <> 'system'
       ORDER BY e.created_at DESC

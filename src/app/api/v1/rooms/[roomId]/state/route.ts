@@ -41,7 +41,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
 
     // First, verify room exists and get room data
     const roomRes = await sql`
-      SELECT r.id, r.name, r.emoji, r.theme, r.world_context, r.status, r.created_at, r.dm_bot_id,
+      SELECT r.id, r.name, r.emoji, r.theme, r.tags, r.world_context, r.status, r.created_at, r.dm_bot_id,
              b.name as dm_name
       FROM rooms r
       JOIN bots b ON b.id = r.dm_bot_id
@@ -56,9 +56,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
     const botContextLimit = 20;
 
     // Run all independent queries in parallel for better performance
-    const [members, chars, summary, turn, events, turnOrder, botDelta] = await Promise.all([
+    const [members, chars, npcs, summary, turn, events, combat, turnOrder, botDelta] = await Promise.all([
       sql`
-        SELECT m.bot_id, m.role, m.joined_at, b.name as bot_name, b.owner_label as owner_label, p.last_seen_at,
+        SELECT m.bot_id, m.role, m.joined_at, b.name as bot_name, b.owner_label as owner_label, b.capabilities as capabilities, p.last_seen_at,
                COALESCE(s.inactive, FALSE) as inactive,
                COALESCE(s.timeout_streak, 0) as timeout_streak,
                COALESCE(br.turns_assigned, 0) as turns_assigned,
@@ -78,6 +78,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
         WHERE room_id = ${roomId}
         ORDER BY updated_at DESC
       `,
+      sql`
+        SELECT id, name, description, stat_block_json, created_at, updated_at
+        FROM room_npcs
+        WHERE room_id = ${roomId}
+        ORDER BY updated_at DESC
+        LIMIT 100
+      `,
       sql`SELECT room_id, party_level, party_current_hp, party_max_hp, updated_at FROM room_summary WHERE room_id = ${roomId} LIMIT 1`,
       sql`SELECT room_id, current_bot_id, turn_index, updated_at FROM room_turn_state WHERE room_id = ${roomId} LIMIT 1`,
       sql`
@@ -85,8 +92,18 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
         FROM room_events e
         LEFT JOIN bots b ON b.id = e.bot_id
         WHERE e.room_id = ${roomId}
+          AND (e.hidden IS NOT TRUE)
         ORDER BY e.created_at DESC
         LIMIT 100
+      `,
+      sql`
+        SELECT e.content, e.created_at
+        FROM room_events e
+        WHERE e.room_id = ${roomId}
+          AND e.kind = 'combat_state'
+          AND (e.hidden IS NOT TRUE)
+        ORDER BY e.created_at DESC
+        LIMIT 1
       `,
       getRoomTurnOrder(roomId, { includeInactive: true }),
       bot
@@ -94,7 +111,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
             WITH last_action AS (
               SELECT created_at AS at
               FROM room_events
-              WHERE room_id = ${roomId} AND bot_id = ${bot.id}
+              WHERE room_id = ${roomId} AND bot_id = ${bot.id} AND (hidden IS NOT TRUE)
               ORDER BY created_at DESC
               LIMIT 1
             )
@@ -103,6 +120,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
             FROM room_events e
             LEFT JOIN bots b ON b.id = e.bot_id
             WHERE e.room_id = ${roomId}
+              AND (e.hidden IS NOT TRUE)
               AND e.created_at > COALESCE((SELECT at FROM last_action), '1970-01-01'::timestamptz)
             ORDER BY e.created_at ASC
             LIMIT ${botContextLimit}
@@ -136,6 +154,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
         joined_at: string;
         bot_name: string;
         owner_label?: string | null;
+        capabilities?: unknown;
         last_seen_at?: string | null;
         inactive?: boolean;
         timeout_streak?: number;
@@ -154,6 +173,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
         joined_at: row.joined_at,
         bot_name: row.bot_name,
         owner_label: (row.owner_label ?? null) as string | null,
+        capabilities:
+          row.capabilities && typeof row.capabilities === 'object' ? (row.capabilities as Record<string, unknown>) : {},
         inactive: !!row.inactive,
         timeout_streak: typeof row.timeout_streak === 'number' ? row.timeout_streak : 0,
         reliability: {
@@ -204,6 +225,20 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
       };
     }
 
+    let combatState: unknown = null;
+    try {
+      const c = (combat as typeof combat & { rows?: unknown[] })?.rows?.[0] as { content?: string; created_at?: string } | undefined;
+      if (c?.content && typeof c.content === 'string') {
+        const parsed = JSON.parse(c.content) as Record<string, unknown>;
+        if (parsed && typeof parsed === 'object') {
+          if (!parsed.updatedAt && c.created_at) parsed.updatedAt = c.created_at;
+          combatState = parsed;
+        }
+      }
+    } catch {
+      combatState = null;
+    }
+
     return NextResponse.json(
       {
         room: roomRes.rows[0],
@@ -215,9 +250,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
           allBotIds: allTurnOrderBotIds,
         },
         characters: chars.rows,
+        npcs: npcs.rows,
         summary: summary.rows[0] ?? null,
         turn: turn.rows[0] ?? null,
         events: events.rows.reverse(),
+        combat: combatState,
         ...(botContext ? { botContext } : {}),
       },
       { headers: { 'cache-control': 'no-store', 'x-request-id': requestId } },

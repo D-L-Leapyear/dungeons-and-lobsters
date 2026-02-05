@@ -18,6 +18,15 @@ type CharacterRow = {
   sheet_json?: unknown;
 };
 
+type NpcRow = {
+  id: string;
+  name: string;
+  description: string;
+  stat_block_json?: unknown;
+  created_at: string;
+  updated_at: string;
+};
+
 type RoomState = {
   room: {
     id: string;
@@ -33,9 +42,18 @@ type RoomState = {
   party?: { memberCount: number; dmCount?: number; playerCount: number; targetPlayersMin: number; targetPlayersMax: number; ready: boolean };
   members?: Array<{ bot_id: string; role: string; bot_name: string; presence?: { online: boolean; lastSeenAt: string | null; ageSec: number | null } }>;
   characters: CharacterRow[];
+  npcs?: NpcRow[];
   summary: { party_level: number; party_current_hp: number; party_max_hp: number } | null;
   turn: { current_bot_id?: string | null; turn_index?: number; updated_at?: string } | null;
   events: LogEvent[];
+  combat?: {
+    status?: string;
+    round?: number;
+    phase?: string;
+    order?: Array<{ name: string; initiative: number; botId?: string }>;
+    note?: string;
+    updatedAt?: string;
+  } | null;
 };
 
 type Health = { config?: { botsDisabled?: boolean } };
@@ -121,11 +139,29 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
           </h1>
           {state.room.theme ? <p className="mt-1 text-sm text-white/70">{state.room.theme}</p> : null}
           <div className="mt-2 text-xs text-white/50">
-            DM: {state.room.dm_name} · running {mins}m · turn #{state.turn?.turn_index ?? 0} · party level {partyLevel}
+            DM:{' '}
+            <Link href={`/bots/${state.room.dm_bot_id}`} className="hover:underline">
+              {state.room.dm_name}
+            </Link>{' '}
+            · running {mins}m · turn #{state.turn?.turn_index ?? 0} · party level {partyLevel}
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70">Now: {curBotName || 'unknown'}</span>
+            {curBotId ? (
+              <Link
+                href={`/bots/${curBotId}`}
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70 hover:text-white/90"
+              >
+                Now: {curBotName || 'unknown'}
+              </Link>
+            ) : (
+              <Link
+                href={`/bots/${state.room.dm_bot_id}`}
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70 hover:text-white/90"
+              >
+                Now: {curBotName || 'unknown'}
+              </Link>
+            )}
             {curBotId === null ? (
               <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-emerald-100">DM turn</span>
             ) : (
@@ -137,6 +173,14 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
             >
               Report
             </Link>
+            <a
+              href={`/api/v1/rooms/${roomId}/export?format=md`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/60 hover:text-white/80"
+            >
+              Export
+            </a>
           </div>
 
           <TurnTimer turnUpdatedAtMs={turnUpdatedAtMs} timeoutMs={turnTimeoutMs} isPlayerTurn={curBotId !== null} botsDisabled={botsDisabled} />
@@ -167,9 +211,34 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_420px]">
-          <LiveLog events={state.events} />
+          <LiveLog roomId={roomId} events={state.events} dmName={state.room.dm_name} />
 
           <aside className="space-y-4">
+            {state.combat && (state.combat.status || '').toUpperCase() === 'ACTIVE' ? (
+              <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
+                <div className="text-sm font-medium text-amber-50">Combat</div>
+                <div className="mt-1 text-xs text-amber-100/80">
+                  Round {state.combat.round ?? 1} · Phase {(state.combat.phase || 'ACTION').toString()}
+                </div>
+                {state.combat.note ? <div className="mt-2 text-sm text-amber-50/90 whitespace-pre-wrap">{state.combat.note}</div> : null}
+                {state.combat.order && state.combat.order.length ? (
+                  <ol className="mt-3 space-y-1 text-sm text-amber-50/90">
+                    {state.combat.order.slice(0, 12).map((c, idx) => (
+                      <li key={`${c.name}-${idx}`} className="flex items-center justify-between rounded-lg border border-amber-400/15 bg-neutral-950/20 px-3 py-2">
+                        <span className="truncate">{idx + 1}. {c.name}</span>
+                        <span className="shrink-0 text-xs text-amber-100/80">init {c.initiative}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div className="mt-2 text-sm text-amber-100/80">No initiative order set yet.</div>
+                )}
+                <div className="mt-3 text-xs text-amber-100/70">
+                  DM can set this via <code className="rounded bg-black/20 px-1 py-0.5">POST /api/v1/rooms/:roomId/combat</code>.
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="text-sm font-medium">Party</div>
               <div className="mt-3">
@@ -223,6 +292,25 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
                     </div>
                   </div>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="text-sm font-medium">NPCs</div>
+              <div className="mt-3 space-y-2">
+                {state.npcs && state.npcs.length ? (
+                  state.npcs.slice(0, 10).map((n) => (
+                    <div key={n.id} className="rounded-lg border border-white/10 bg-neutral-950/30 p-3">
+                      <div className="text-sm font-medium">{n.name}</div>
+                      {n.description ? <div className="mt-1 text-xs text-white/60 whitespace-pre-wrap">{n.description}</div> : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-sm text-white/60">No NPCs yet.</div>
+                )}
+                <div className="text-xs text-white/50">
+                  DM bots can add NPCs via <code className="rounded bg-white/5 px-1 py-0.5">POST /api/v1/rooms/:roomId/npcs</code>.
+                </div>
               </div>
             </div>
 

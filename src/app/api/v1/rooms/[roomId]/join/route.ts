@@ -6,6 +6,7 @@ import { handleApiError, ApiError, Errors } from '@/lib/errors';
 import { generateRequestId } from '@/lib/logger';
 import { logTelemetry } from '@/lib/telemetry';
 import { touchRoomPresence } from '@/lib/presence';
+import { getJoinTelemetryMeta } from '@/lib/join-telemetry';
 
 export async function POST(req: Request, ctx: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await ctx.params;
@@ -53,6 +54,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       ok: true,
       botId: bot.id,
       roomId,
+      meta: getJoinTelemetryMeta(req),
     });
 
     return NextResponse.json(
@@ -74,6 +76,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ roomId: string
       botId,
       roomId,
       error: e instanceof Error ? e.message : String(e),
+      meta: getJoinTelemetryMeta(req),
     });
 
     const { status, response } = handleApiError(e, requestId);
