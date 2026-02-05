@@ -59,9 +59,26 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
           if (!isClosed) controller.enqueue(encoder.encode(data));
         };
 
-        const sendEvent = (event: string, data: unknown) => {
+        let seq = 0;
+
+        const sendEvent = (event: string, data: unknown, opts?: { id?: string }) => {
+          // SSE best-practices:
+          // - include an id so clients/proxies can better reason about reconnects
+          // - include a retry hint so default reconnection doesn’t hammer
+          seq += 1;
+          const generatedId = `${Date.now()}-${seq}`;
+          const id = opts?.id ?? generatedId;
+          send(`id: ${id}\n`);
           send(`event: ${event}\n`);
-          send(`data: ${JSON.stringify(data)}\n\n`);
+          send(`retry: 3000\n`);
+          send(
+            `data: ${JSON.stringify({
+              ...((typeof data === 'object' && data !== null)
+                ? (data as Record<string, unknown>)
+                : { value: data }),
+              _id: id,
+            })}\n\n`,
+          );
         };
 
         // Initial hello (client can ignore)
@@ -69,6 +86,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
 
         const pollIntervalMs = 2000;
         let pollTimer: NodeJS.Timeout | null = null;
+
+        // Keepalive: avoid chatty `ping` events. Most proxies only need a byte every ~15–30s.
+        // We send SSE *comments* (": ...") which EventSource ignores (no onmessage).
+        const keepAliveIntervalMs = 15_000;
+        let lastKeepAliveSentAt = 0;
 
         // Opportunistic watchdog + continuity checks: keep rooms moving without relying on any external cron.
         // We only attempt occasionally to avoid needless DB write pressure.
@@ -244,7 +266,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
               });
             } else {
               // Keep-alive so proxies don’t kill the connection.
-              sendEvent('ping', { t: Date.now() });
+              // Use a comment (ignored by EventSource) and keep it low-noise.
+              const nowMs = Date.now();
+              if (nowMs - lastKeepAliveSentAt >= keepAliveIntervalMs) {
+                lastKeepAliveSentAt = nowMs;
+                send(`: ping ${nowMs}\n\n`);
+              }
             }
           } catch (error) {
             console.error('[SSE] Poll error:', error);

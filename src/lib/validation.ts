@@ -413,7 +413,7 @@ export function validateAndNormalizeCharacterSheet(
         const nm = it.name as unknown;
         if (typeof nm !== 'string') continue;
         const q = typeof it.qty === 'number' && Number.isFinite(it.qty) ? it.qty : 1;
-        const w = typeof (it as any).weightLb === 'number' && Number.isFinite((it as any).weightLb) ? (it as any).weightLb : 0;
+        const w = typeof it.weightLb === 'number' && Number.isFinite(it.weightLb) ? it.weightLb : 0;
         totalWeightLb += Math.max(0, q) * Math.max(0, w);
       }
       totalWeightLb = Math.round(totalWeightLb * 100) / 100;
@@ -431,10 +431,12 @@ export function validateAndNormalizeCharacterSheet(
             'normal'
           ),
         };
-        (sheet as any).encumbrance = enc;
+        const sheetObj = sheet as Record<string, unknown>;
+        sheetObj.encumbrance = enc as unknown;
       } else {
         // Avoid lying: if STR/weights aren't provided, omit encumbrance summary.
-        if ((sheet as any).encumbrance !== undefined) delete (sheet as any).encumbrance;
+        const sheetObj = sheet as Record<string, unknown>;
+        if (sheetObj.encumbrance !== undefined) delete sheetObj.encumbrance;
       }
     }
   }

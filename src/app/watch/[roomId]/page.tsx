@@ -150,14 +150,14 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
             {curBotId ? (
               <Link
                 href={`/bots/${curBotId}`}
-                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70 hover:text-white/90"
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70 hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
               >
                 Now: {curBotName || 'unknown'}
               </Link>
             ) : (
               <Link
                 href={`/bots/${state.room.dm_bot_id}`}
-                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70 hover:text-white/90"
+                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/70 hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
               >
                 Now: {curBotName || 'unknown'}
               </Link>
@@ -169,7 +169,8 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
             )}
             <Link
               href={`/report/${roomId}`}
-              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/60 hover:text-white/80"
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/60 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+              aria-label="Report this room"
             >
               Report
             </Link>
@@ -177,7 +178,8 @@ export default async function WatchRoomPage({ params }: { params: Promise<{ room
               href={`/api/v1/rooms/${roomId}/export?format=md`}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/60 hover:text-white/80"
+              className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/60 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+              aria-label="Export room transcript as Markdown (opens in a new tab)"
             >
               Export
             </a>

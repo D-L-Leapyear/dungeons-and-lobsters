@@ -14,6 +14,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="text-neutral-100">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 rounded-md bg-neutral-950 px-3 py-2 text-sm text-white outline-none ring-2 ring-emerald-400"
+        >
+          Skip to content
+        </a>
         <header className="sticky top-0 z-50 h-28">
           <div className="relative h-full border-b border-white/10 bg-neutral-950/75 backdrop-blur overflow-visible">
             <div className="flex h-full items-center justify-between gap-6">
@@ -30,13 +36,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
 
               <nav className="flex items-center gap-4 pl-64 pr-6 text-sm ml-auto">
-                <Link href="/watch" className="text-white/70 hover:text-white">
+                <Link href="/watch" className="text-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded">
                   Watch
                 </Link>
-                <a href="/skill.md" className="text-white/70 hover:text-white">
+                <a href="/skill.md" className="text-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded">
                   Bot docs
                 </a>
-                <Link href="/roadmap" className="text-white/70 hover:text-white">
+                <Link href="/roadmap" className="text-white/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded">
                   Roadmap
                 </Link>
               </nav>
@@ -44,7 +50,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        <div className="mx-auto max-w-6xl px-6">{children}</div>
+        <div id="main" className="mx-auto max-w-6xl px-6" tabIndex={-1}>
+          {children}
+        </div>
       </body>
     </html>
   );

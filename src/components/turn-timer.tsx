@@ -69,7 +69,14 @@ export function TurnTimer({
 
       {showSkip ? (
         <div className="flex items-center gap-2">
-          <div className="h-2 w-28 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-2 w-28 overflow-hidden rounded-full bg-white/10"
+            role="progressbar"
+            aria-label="Turn timeout progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progressPct}
+          >
             <div
               className={`h-2 ${progressPct >= 90 ? 'bg-amber-400' : 'bg-sky-400'}`}
               style={{ width: `${progressPct}%` }}

@@ -137,6 +137,12 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
 
   return (
     <div className="space-y-3">
+      <a
+        href="#room-log"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 rounded-md bg-neutral-950 px-3 py-2 text-sm text-white outline-none ring-2 ring-emerald-400"
+      >
+        Skip to room log
+      </a>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">
           <button
@@ -145,7 +151,7 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
               setFollow(false);
               scrollToTop();
             }}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
           >
             Start
           </button>
@@ -156,7 +162,7 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
               void loadEarlier();
             }}
             disabled={!roomId || loadingEarlier || !hasMoreEarlier}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 disabled:opacity-40"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
             title={!roomId ? 'Pagination requires roomId' : !hasMoreEarlier ? 'No earlier events' : undefined}
           >
             {loadingEarlier ? 'Loading…' : 'Load earlier'}
@@ -164,7 +170,7 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
           <button
             type="button"
             onClick={() => scrollToEvent(lastRecapEventId)}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 disabled:opacity-40"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
             disabled={!lastRecapEventId}
             title={!lastRecapEventId ? 'No recap yet' : undefined}
           >
@@ -173,7 +179,7 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
           <button
             type="button"
             onClick={() => scrollToEvent(lastDmEventId)}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 disabled:opacity-40"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
             disabled={!lastDmEventId}
             title={!lastDmEventId ? 'No DM event yet' : undefined}
           >
@@ -185,7 +191,7 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
               setFollow(true);
               scrollToBottom();
             }}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70 hover:text-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
           >
             Bottom
           </button>
@@ -198,7 +204,7 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
             setFollow(next);
             if (next) scrollToBottom();
           }}
-          className={`rounded-full border px-3 py-1 text-xs ${follow ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/70 hover:text-white/90'}`}
+          className={`rounded-full border px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${follow ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/70 hover:text-white/90'}`}
           title={follow ? 'Auto-following new events' : 'Paused (won\'t auto-scroll)'}
         >
           {follow ? 'Following' : 'Paused'}
@@ -206,32 +212,47 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
+        <label className="sr-only" htmlFor="filter-q">
+          Search log text
+        </label>
         <input
+          id="filter-q"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
             setFollow(false);
           }}
           placeholder="Search text…"
-          className="w-full min-w-[180px] flex-1 rounded-lg border border-white/10 bg-neutral-950/40 px-3 py-2 text-sm text-white/80 placeholder:text-white/40"
+          aria-label="Search log text"
+          className="w-full min-w-[180px] flex-1 rounded-lg border border-white/10 bg-neutral-950/40 px-3 py-2 text-sm text-white/80 placeholder:text-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
         />
+        <label className="sr-only" htmlFor="filter-bot">
+          Filter by bot name
+        </label>
         <input
+          id="filter-bot"
           value={bot}
           onChange={(e) => {
             setBot(e.target.value);
             setFollow(false);
           }}
           placeholder="Bot name…"
-          className="w-full min-w-[140px] flex-1 rounded-lg border border-white/10 bg-neutral-950/40 px-3 py-2 text-sm text-white/80 placeholder:text-white/40"
+          aria-label="Filter by bot name"
+          className="w-full min-w-[140px] flex-1 rounded-lg border border-white/10 bg-neutral-950/40 px-3 py-2 text-sm text-white/80 placeholder:text-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
         />
+        <label className="sr-only" htmlFor="filter-kind">
+          Filter by event kind
+        </label>
         <input
+          id="filter-kind"
           value={kind}
           onChange={(e) => {
             setKind(e.target.value);
             setFollow(false);
           }}
           placeholder="Kind (say/recap/system)…"
-          className="w-full min-w-[160px] flex-1 rounded-lg border border-white/10 bg-neutral-950/40 px-3 py-2 text-sm text-white/80 placeholder:text-white/40"
+          aria-label="Filter by event kind"
+          className="w-full min-w-[160px] flex-1 rounded-lg border border-white/10 bg-neutral-950/40 px-3 py-2 text-sm text-white/80 placeholder:text-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
         />
         <button
           type="button"
@@ -240,7 +261,7 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
             setBot('');
             setKind('');
           }}
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 hover:text-white/90"
+          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/70 hover:text-white/90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
           disabled={!isFiltering}
         >
           Clear
@@ -248,7 +269,15 @@ export function LiveLog({ roomId, events, dmName }: { roomId?: string; events: L
         {isFiltering ? <div className="text-xs text-white/50">Showing {visible.length} of {ordered.length}</div> : null}
       </div>
 
-      <div ref={containerRef} className="h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-4">
+      <div
+        id="room-log"
+        ref={containerRef}
+        role="log"
+        aria-label="Room event log"
+        aria-live={follow && !isFiltering ? 'polite' : 'off'}
+        className="h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-white/5 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+        tabIndex={0}
+      >
         {ordered.length === 0 ? (
           <div className="text-sm text-white/60">No events yet.</div>
         ) : visible.length === 0 ? (

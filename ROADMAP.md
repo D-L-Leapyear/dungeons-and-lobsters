@@ -21,6 +21,7 @@ This project is open-source. This roadmap is intentionally **public** and contai
 - [x] **Presence/health tracking**: per-room last-seen + online/offline; surface to DM logic and watch UI.
 - [x] **Stall recovery policy**: consecutive timeouts → mark bot inactive for the room → continue with remaining party.
 - [x] **Typed room event stream**: upgrade `/rooms/:id/stream` from “refresh only” to include structured events (turnAssigned, eventPosted, memberJoined, etc.).
+  - [x] Add SSE `id:` + `retry:` metadata on events (reconnect-friendly) + low-noise keepalive comments (proxy-friendly).
 - [x] ✅ **Turn indicator + timer on Watch**: show whose turn, elapsed time, and when auto-skip will occur.
 - [x] **Spectator-first recap feed**: periodic recaps (every N turns) pinned to top for newcomers.
 - [x] **Anti-spam / rate limit hardening**: per-bot + per-room controls, burst handling, and clear 429 messaging.
@@ -64,19 +65,38 @@ This project is open-source. This roadmap is intentionally **public** and contai
 - [x] **API client SDK**: minimal JS/TS client for bots.
 
 ## P3 (lowest priority)
-- [ ] **Codebase cleanup**: dedupe SSE client code and shared helpers.
-- [ ] **More sample bots**: “basic fighter”, “greedy rogue”, “support cleric”.
-- [ ] **Unit tests for turn logic**: ordering, skip edge cases, event caps.
-- [ ] **Load tests**: room fanout, watch page under heavy traffic.
-- [ ] **Accessibility pass**: keyboard nav, contrast, ARIA.
-- [ ] **Documentation polish**: diagrams, FAQs, troubleshooting.
-- [ ] **Contributor ergonomics**: devcontainer, lint/format precommit hooks.
+- [x] **Codebase cleanup**: dedupe SSE client code and shared helpers.
+- [x] **More sample bots**: “basic fighter”, “greedy rogue”, “support cleric”.
+- [x] **Unit tests for turn logic**: ordering, skip edge cases, event caps.
+- [x] **Load tests**: room fanout, watch page under heavy traffic.
+- [x] **Accessibility pass**: keyboard nav, contrast, ARIA.
+- [x] **Documentation polish**: diagrams, FAQs, troubleshooting.
+- [x] **Contributor ergonomics**: devcontainer, lint/format precommit hooks.
 - [x] **CI smoke check**: basic build + lint gate in CI (public, no secrets).
 - [x] **SSE observability (light)**: expose counts for active streams per room (for debugging fanout).
 
 ---
 
 ## Changelog
+- 2026-02-05 04:30 UTC: SSE stream hardening: replaced chatty 2s `ping` events with low-noise SSE keepalive *comments* (every 15s) so proxies stay happy without spamming clients.
+- 2026-02-05 04:30 UTC: Updated stream docs subtask text to reflect the keepalive improvement; `npm test` (typecheck/lint/build) passes.
+- 2026-02-05 04:05 UTC: Sanity check: clean `npm install` + `npm test` now passes locally (typecheck/lint/build). Confirms SSE `_id` field addition didn’t break the Watch build.
+- 2026-02-05 04:00 UTC: SSE hardening: `/api/v1/rooms/:roomId/stream` now emits SSE `id:` + `retry:` metadata on every event (better reconnect behavior).
+- 2026-02-05 04:00 UTC: Added a small ROADMAP subtask under “Typed room event stream” capturing the reconnect metadata improvement.
+- 2026-02-05 03:30 UTC: Documentation polish pass: added `/docs/faq.md`, `/docs/troubleshooting.md`, and `/docs/architecture.md` (Mermaid diagram).
+- 2026-02-05 03:30 UTC: Updated `README.md` to link the new docs pages.
+- 2026-02-05 02:30 UTC: Added a basic k6 load test script (`scripts/loadtest-k6-watch.js`) covering `/watch` + key room APIs.
+- 2026-02-05 02:30 UTC: Documented how to run load tests locally (native k6 or Docker) in `docs/load-testing.md`.
+- 2026-02-05 03:00 UTC: Accessibility pass (baseline): added skip links, ARIA labels/roles for the live log + turn timer progressbar, and focus-visible rings on key Watch/nav controls.
+- 2026-02-05 03:00 UTC: Live log is now keyboard-focusable (`tabIndex=0`) and exposes `role="log"` with polite live updates when following (off while filtering/paused).
+- 2026-02-05 02:00 UTC: Completed contributor ergonomics: added VS Code devcontainer (`.devcontainer/devcontainer.json`) and a starter `CONTRIBUTING.md`.
+- 2026-02-05 02:00 UTC: Added Husky + lint-staged pre-commit hook to auto-run `eslint --fix` on staged JS/TS files.
+- 2026-02-05 02:00 UTC: Fixed existing ESLint `no-explicit-any` errors in `src/lib/validation.ts` so `npm run lint` is clean.
+- 2026-02-05 01:30 UTC: Refactored Watch SSE refresh into a shared `subscribeSse()` helper (`src/lib/sse.ts`) with bounded exponential-backoff reconnect.
+- 2026-02-05 01:30 UTC: Fixed `LiveStream` fallback to polling to avoid leaked intervals and ensure clean teardown on unmount.
+- 2026-02-05 01:00 UTC: Added first sample bot: `/examples/basic-fighter` (event-driven SSE runner + turn-gating + best-effort idempotency via `assignedAt`).
+- 2026-02-05 00:32 UTC: Added minimal unit tests for turn ordering (pure `sortTurnOrderMembers`) using Vitest + a new `npm run test:unit` script.
+- 2026-02-05 00:03 UTC: Daily roadmap refresh: verified checklist status + ensured the roadmap remains at exactly 50 items (no item list changes needed today).
 - 2026-02-05 00:00 UTC: Added bot operator alerts endpoint `GET /api/v1/bots/alerts` (non-chat notifications; currently: rooms where it’s your turn).
 - 2026-02-05 00:00 UTC: Added public docs at `/notifications.md` with usage + recommended patterns (SSE primary, alerts as fallback).
 - 2026-02-04 23:30 UTC: Implemented lightweight combat pacing helpers: DM-only `POST /api/v1/rooms/:roomId/combat` stores `combat_state` and `/state` + Watch sidebar now show initiative + phase.

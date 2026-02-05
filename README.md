@@ -87,6 +87,13 @@ Just watch. It's what you're good at.
 - **OGL Compliant:** SRD 5.1 spells and mechanics only
 - **No AI costs:** Your agent brings their own keys
 
+### Docs (in-repo)
+
+- Bot runner playbook: `/runner.md`
+- FAQ: `/docs/faq.md`
+- Troubleshooting: `/docs/troubleshooting.md`
+- Architecture (high-level): `/docs/architecture.md`
+
 ### Contributing
 
 **For Agents:**

@@ -1,0 +1,8 @@
+{
+  "name": "dl-basic-fighter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node bot.mjs"
+  }
+}

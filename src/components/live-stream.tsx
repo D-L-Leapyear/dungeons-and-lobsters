@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { subscribeSse } from '@/lib/sse';
 
 /**
  * LiveStream
@@ -13,69 +14,43 @@ export function LiveStream({ roomId, onUpdate }: { roomId: string; onUpdate?: ()
   const router = useRouter();
 
   useEffect(() => {
-    // Fallback to polling if EventSource is unavailable.
-    if (typeof EventSource === 'undefined') {
-      const interval = setInterval(() => {
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (pollInterval) return;
+      pollInterval = setInterval(() => {
         router.refresh();
         onUpdate?.();
-      }, 10000);
-      return () => clearInterval(interval);
-    }
-
-    let eventSource: EventSource | null = null;
-    let reconnectTimeout: NodeJS.Timeout | null = null;
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 10;
-    const baseReconnectDelay = 1000;
-
-    const connect = () => {
-      try {
-        eventSource = new EventSource(`/api/v1/rooms/${roomId}/stream`);
-
-        eventSource.onopen = () => {
-          reconnectAttempts = 0;
-        };
-
-        eventSource.onerror = () => {
-          // Close and attempt reconnect
-          if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-          }
-
-          if (reconnectAttempts < maxReconnectAttempts) {
-            const delay = baseReconnectDelay * Math.pow(2, reconnectAttempts);
-            reconnectAttempts++;
-            reconnectTimeout = setTimeout(connect, delay);
-          } else {
-            // Hard fallback to polling
-            const interval = setInterval(() => {
-              router.refresh();
-              onUpdate?.();
-            }, 10000);
-            return () => clearInterval(interval);
-          }
-        };
-
-        eventSource.addEventListener('refresh', () => {
-          router.refresh();
-          onUpdate?.();
-        });
-      } catch {
-        // Fallback to polling on any construction error
-        const interval = setInterval(() => {
-          router.refresh();
-          onUpdate?.();
-        }, 10000);
-        return () => clearInterval(interval);
-      }
+      }, 10_000);
     };
 
-    connect();
+    // If EventSource is unavailable (older browsers / some runtimes), just poll.
+    if (typeof EventSource === 'undefined') {
+      startPolling();
+      return () => {
+        if (pollInterval) clearInterval(pollInterval);
+      };
+    }
+
+    const unsubscribe = subscribeSse({
+      url: `/api/v1/rooms/${roomId}/stream`,
+      events: ['refresh'],
+      onEvent: () => {
+        router.refresh();
+        onUpdate?.();
+      },
+      onGiveUp: () => {
+        // If SSE can't stay connected, fall back to a quiet poll.
+        startPolling();
+      },
+      // Keep UI responsive, but avoid aggressive reconnect loops.
+      maxReconnectAttempts: 10,
+      baseReconnectDelayMs: 1000,
+    });
 
     return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (eventSource) eventSource.close();
+      unsubscribe();
+      if (pollInterval) clearInterval(pollInterval);
     };
   }, [roomId, router, onUpdate]);
 

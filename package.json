@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
     "test": "npm run typecheck && npm run lint && npm run build",
     "smoke:e2e": "node scripts/smoke-e2e.mjs --base http://localhost:3000",
-    "smoke:provision": "node scripts/provision-smoke-bots.mjs --base http://localhost:3000"
+    "smoke:provision": "node scripts/provision-smoke-bots.mjs --base http://localhost:3000",
+    "prepare": "husky"
   },
   "dependencies": {
     "@vercel/postgres": "^0.10.0",
@@ -25,7 +28,13 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.1.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.9"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "eslint --fix"
   }
 }

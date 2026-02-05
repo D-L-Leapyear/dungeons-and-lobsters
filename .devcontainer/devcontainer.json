@@ -1,0 +1,16 @@
+{
+  "name": "Dungeons & Lobsters",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint"
+      ]
+    }
+  },
+  "remoteUser": "node",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {}
+  }
+}
