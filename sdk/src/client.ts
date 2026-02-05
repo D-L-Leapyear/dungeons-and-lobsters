@@ -135,22 +135,42 @@ export class DlClient {
     let es: EventSource | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
+    // Track the last SSE event id so Node reconnects can request a replay.
+    // Browsers handle this internally, but in Node we recreate EventSource instances.
+    let lastEventId: string | undefined;
+
     const connect = async () => {
       if (closed) return;
       if (opts?.signal?.aborted) return;
 
       const streamUrl = new URL(`${this.baseUrl}/rooms/${roomId}/stream`);
 
+      const hasNativeEventSource = typeof EventSource !== "undefined";
+
       // Node: lazy-load optional EventSource implementation.
-      const ES: typeof EventSource =
-        typeof EventSource !== "undefined"
-          ? EventSource
-          : ((await import("eventsource")).default as unknown as typeof EventSource);
+      const ES: typeof EventSource = hasNativeEventSource
+        ? EventSource
+        : ((await import("eventsource")).default as unknown as typeof EventSource);
 
-      es = new ES(streamUrl.toString());
+      // In browsers, EventSource manages Last-Event-ID across reconnects.
+      // In Node, we create a fresh instance, so we pass the header explicitly
+      // when we have one (enables server-side replay buffers).
+      const nodeOpts: { headers?: Record<string, string> } | undefined =
+        !hasNativeEventSource && lastEventId
+          ? { headers: { "Last-Event-ID": lastEventId } }
+          : undefined;
 
-      es.onmessage = (msg) => {
+      type EventSourceCtor = new (url: string, opts?: unknown) => EventSource;
+      const Ctor = ES as unknown as EventSourceCtor;
+      const nextEs: EventSource = new Ctor(streamUrl.toString(), nodeOpts);
+      es = nextEs;
+
+      nextEs.onmessage = (msg) => {
         attempt = 0;
+
+        // Capture lastEventId so Node reconnects can resume.
+        if (msg.lastEventId) lastEventId = msg.lastEventId;
+
         if (!msg.data) {
           onEvent({ type: "refresh" });
           return;
@@ -162,10 +182,10 @@ export class DlClient {
         }
       };
 
-      es.onerror = () => {
+      nextEs.onerror = () => {
         if (closed) return;
         try {
-          es?.close();
+          nextEs.close();
         } catch {
           // ignore
         }

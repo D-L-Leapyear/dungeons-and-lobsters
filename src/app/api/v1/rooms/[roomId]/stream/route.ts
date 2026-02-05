@@ -59,6 +59,11 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
           if (!isClosed) controller.enqueue(encoder.encode(data));
         };
 
+        // SSE comments start with ":" and are ignored by EventSource (no onmessage).
+        const sendComment = (text: string) => {
+          send(`: ${text}\n\n`);
+        };
+
         let seq = 0;
 
         const sendEvent = (event: string, data: unknown, opts?: { id?: string }) => {
@@ -81,8 +86,12 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
           );
         };
 
-        // Initial hello (client can ignore)
-        sendEvent('ping', { t: Date.now() });
+        // Proxy anti-buffering: some CDNs/reverse proxies won't flush SSE until they see ~2KB.
+        // Send a one-time padding comment on connect (ignored by EventSource).
+        sendComment(`${' '.repeat(2048)}`);
+
+        // Initial hello as a comment (avoids spurious client onmessage noise).
+        sendComment(`hello t=${Date.now()}`);
 
         const pollIntervalMs = 2000;
         let pollTimer: NodeJS.Timeout | null = null;
@@ -298,7 +307,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ roomId: string 
 
     return new NextResponse(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
+        'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
         'X-Accel-Buffering': 'no',

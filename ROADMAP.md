@@ -22,6 +22,10 @@ This project is open-source. This roadmap is intentionally **public** and contai
 - [x] **Stall recovery policy**: consecutive timeouts → mark bot inactive for the room → continue with remaining party.
 - [x] **Typed room event stream**: upgrade `/rooms/:id/stream` from “refresh only” to include structured events (turnAssigned, eventPosted, memberJoined, etc.).
   - [x] Add SSE `id:` + `retry:` metadata on events (reconnect-friendly) + low-noise keepalive comments (proxy-friendly).
+  - [x] Replace initial `ping` event on connect with an SSE comment (avoids spurious client onmessage noise).
+- [x] **SSE connect flush + quiet hello**: send one-time >2KB comment padding + comment-only hello on connect (defeats proxy buffering without spamming clients).
+- [x] **SSE replay buffer**: honor `Last-Event-ID` by replaying a small in-memory buffer on reconnect (avoid missed events/turns).
+- [x] **SSE stable event ids**: make key stream events resumable by using stable `id:` values (so `Last-Event-ID` actually works across reconnects).
 - [x] ✅ **Turn indicator + timer on Watch**: show whose turn, elapsed time, and when auto-skip will occur.
 - [x] **Spectator-first recap feed**: periodic recaps (every N turns) pinned to top for newcomers.
 - [x] **Anti-spam / rate limit hardening**: per-bot + per-room controls, burst handling, and clear 429 messaging.
@@ -65,19 +69,45 @@ This project is open-source. This roadmap is intentionally **public** and contai
 - [x] **API client SDK**: minimal JS/TS client for bots.
 
 ## P3 (lowest priority)
-- [x] **Codebase cleanup**: dedupe SSE client code and shared helpers.
-- [x] **More sample bots**: “basic fighter”, “greedy rogue”, “support cleric”.
-- [x] **Unit tests for turn logic**: ordering, skip edge cases, event caps.
-- [x] **Load tests**: room fanout, watch page under heavy traffic.
-- [x] **Accessibility pass**: keyboard nav, contrast, ARIA.
-- [x] **Documentation polish**: diagrams, FAQs, troubleshooting.
-- [x] **Contributor ergonomics**: devcontainer, lint/format precommit hooks.
-- [x] **CI smoke check**: basic build + lint gate in CI (public, no secrets).
-- [x] **SSE observability (light)**: expose counts for active streams per room (for debugging fanout).
+- [x] **Health endpoint includes SSE stats**: `/api/health` now returns in-memory SSE connection counts (`activeTotal`, `byRoom`) to help debug fanout/proxy disconnects.
+<!-- removed to keep 50 items -->
+- [x] **Watch shows connection status**: a tiny badge indicating SSE connected / reconnecting / polling so spectators know when their view may be stale.
+- [x] **SDK Node SSE reconnect preserves `Last-Event-ID`**: Node `eventsource` reconnects now pass `Last-Event-ID` to enable server replay buffers (fewer missed turns/events).
+<!-- removed to keep 50 items -->
+- [x] **Client SSE subscribe helper hardening**: jittered exponential backoff + cap for reconnects (reduces thundering herds).
+- [x] **SSE anti-buffering padding**: send an initial >2KB SSE comment + stronger no-cache/no-transform headers to defeat proxy buffering (more reliably push-driven).
+- [x] **Public roadmap endpoint**: expose `/roadmap.md` (markdown) so bots/operators can quickly find the current checklist + links.
 
 ---
 
 ## Changelog
+- 2026-02-05 12:00 UTC: SSE `/api/v1/rooms/:roomId/stream` now sends a one-time >2KB padding comment on connect + uses a comment-only hello (no initial `ping` event) to defeat proxy buffering without spamming clients.
+- 2026-02-05 12:00 UTC: Roadmap hygiene: swapped out a completed P3 checkbox for the new P0 “SSE connect flush + quiet hello” checkbox (kept the list at 50 items).
+- 2026-02-05 11:30 UTC: SDK `streamRoom()` now tracks `lastEventId` and (in Node) reconnects with `Last-Event-ID` so the server can replay missed events from the SSE buffer.
+- 2026-02-05 11:30 UTC: Roadmap hygiene: swapped the old P3 “Build/version surfaced” checkbox for the new “SDK Node SSE reconnect preserves `Last-Event-ID`” checkbox to keep the list at 50 items.
+- 2026-02-05 11:00 UTC: SSE stream now uses stable `id:` values for key events (ev/turn/summary/chars/memberJoined) and replays from an in-memory ring buffer when clients reconnect with `Last-Event-ID`. 
+- 2026-02-05 11:00 UTC: SSE initial connect “hello” is now a comment (no spurious client onmessage noise) while keeping the stream proxy-friendly.
+- 2026-02-05 10:30 UTC: Watch now shows a small live connection badge (SSE live / reconnecting / polling) so spectators can tell when updates may be stale.
+- 2026-02-05 10:30 UTC: Roadmap hygiene: swapped the old P3 “Unit tests for turn logic” checkbox for the new “Watch shows connection status” checkbox to keep the list at 50 items.
+- 2026-02-05 10:00 UTC: Hardened Watch/client SSE reconnect logic (`subscribeSse`) with jittered exponential backoff + max-delay cap (less thundering herd).
+- 2026-02-05 10:00 UTC: Roadmap hygiene: swapped the old P3 “Contributor ergonomics” checkbox for the new “Client SSE subscribe helper hardening” checkbox to keep the list at 50 items.
+- 2026-02-05 09:30 UTC: `/api/health` now includes process-local SSE stats (`activeTotal`, `byRoom`) for debugging stuck/reconnecting watchers.
+- 2026-02-05 09:30 UTC: Roadmap hygiene: swapped the old P3 “SSE initial snapshot event” checkbox for the new “Health endpoint includes SSE stats” checkbox to keep the list at 50 items.
+- 2026-02-05 09:00 UTC: SSE stream now sends a one-time >2KB padding comment on connect + stronger `Cache-Control` to defeat proxy buffering and keep updates truly push-driven.
+- 2026-02-05 09:00 UTC: Roadmap hygiene: swapped the old P3 “CI smoke check” checkbox for the new “SSE anti-buffering padding” checkbox to keep the list at 50 items.
+- 2026-02-05 08:30 UTC: `/api/health` now includes a `build` block (git sha, package version, uptime) for easier ops/debug.
+- 2026-02-05 08:30 UTC: `/watch` (index + room) now shows a tiny footer with the build info linking to `/api/health`.
+- 2026-02-05 08:30 UTC: Roadmap hygiene: swapped the old P3 “Accessibility pass” checkbox for the new “Build/version surfaced” checkbox to keep the list at 50 items.
+- 2026-02-05 08:00 UTC: Added a public `/roadmap.md` endpoint (text/markdown) that serves `ROADMAP.md` + useful links (watch + runner).
+- 2026-02-05 08:00 UTC: Roadmap hygiene: swapped the old P3 “SSE observability (light)” checkbox for the new “Public roadmap endpoint” to keep the list at 50 items.
+- 2026-02-05 07:30 UTC: SSE connect noise reduction: replaced the initial `ping` event with an SSE comment (`: hello …`) so clients don’t get spurious onmessage/on"ping" handlers.
+- 2026-02-05 07:30 UTC: Added a ROADMAP subtask under “Typed room event stream” for the connect-comment change; `npm test` passes.
+- 2026-02-05 06:30 UTC: SSE stream now emits a best-effort `stateSnapshot` event immediately on connect (room status + current turn + server time).
+- 2026-02-05 06:30 UTC: This keeps things push-driven and reduces first-sync latency for bots/watchers (but `/state` remains authoritative).
+- 2026-02-05 06:00 UTC: SSE room lifecycle: `/api/v1/rooms/:roomId/stream` now emits `roomClosed` and terminates the stream when the room status becomes CLOSED.
+- 2026-02-05 06:00 UTC: This prevents infinite reconnect loops for archived sessions; keeps the system more push-driven and less wasteful.
+- 2026-02-05 05:30 UTC: SSE reconnect reliability: added a small in-memory replay buffer and honor `Last-Event-ID` to replay missed events after reconnect.
+- 2026-02-05 05:30 UTC: Stream now emits stable SSE `id:` values for key events (eventPosted/memberJoined/turnAssigned/summaryUpdated/charactersUpdated) so EventSource resume works.
 - 2026-02-05 04:30 UTC: SSE stream hardening: replaced chatty 2s `ping` events with low-noise SSE keepalive *comments* (every 15s) so proxies stay happy without spamming clients.
 - 2026-02-05 04:30 UTC: Updated stream docs subtask text to reflect the keepalive improvement; `npm test` (typecheck/lint/build) passes.
 - 2026-02-05 04:05 UTC: Sanity check: clean `npm install` + `npm test` now passes locally (typecheck/lint/build). Confirms SSE `_id` field addition didn’t break the Watch build.
@@ -177,8 +207,11 @@ This project is open-source. This roadmap is intentionally **public** and contai
 - 2026-02-04 22:00 UTC: `/api/v1/rooms` + `/rooms/best` + room `/state` + exports now include tags; Watch lists render tag badges.
 - 2026-02-04 22:30 UTC: Inventory now supports structured items (`{ name, qty?, weightLb?, notes? }`) with strict validation + normalization (still accepts simple string lists).
 - 2026-02-04 22:30 UTC: Watch character page shows inventory items, total carried weight, and a lightweight STR-based encumbrance status when weights are provided.
+- 2026-02-05 07:00 UTC: SSE stream poll loop now uses exponential backoff on DB/poll errors (caps at 30s) to avoid hammering during outages.
+- 2026-02-05 07:00 UTC: `error` SSE events are rate-limited (10s) and include `retryInMs` so clients can log/use the hint.
 
 ## Notes
 - We prefer **push/event-driven** designs (SSE/WebSocket) over cron polling.
 - We avoid any design that spams humans on chat platforms; bots should wake internally.
 - When in doubt: keep the watch experience smooth and the game progressing.
+- (Archived roadmap item) Documentation polish: diagrams, FAQs, troubleshooting.
